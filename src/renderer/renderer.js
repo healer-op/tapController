@@ -35,17 +35,21 @@ const restartBtn   = document.getElementById('restart-app-btn');
 const updateMsg    = updateBanner?.querySelector('.update-msg');
 
 window.api.onUpdateStatus((data) => {
-  if (data.type === 'available' || data.type === 'ready') {
+  if (data.type === 'available') {
     updateBanner.classList.remove('hidden');
-    if (data.type === 'ready') {
-      if (updateMsg) updateMsg.textContent = `Version ${data.version || ''} is ready!`;
-      restartBtn.textContent = 'Restart to Update';
-      restartBtn.disabled = false;
-    } else {
-      if (updateMsg) updateMsg.textContent = `Downloading v${data.version || ''}...`;
-      restartBtn.textContent = 'Downloading...';
-      restartBtn.disabled = true;
-    }
+    if (updateMsg) updateMsg.textContent = `v${data.version || ''} available — preparing download...`;
+    restartBtn.textContent = 'Downloading...';
+    restartBtn.disabled = true;
+  } else if (data.type === 'downloading') {
+    updateBanner.classList.remove('hidden');
+    if (updateMsg) updateMsg.textContent = `Downloading update... ${data.percent}%`;
+    restartBtn.textContent = `${data.percent}%`;
+    restartBtn.disabled = true;
+  } else if (data.type === 'ready') {
+    updateBanner.classList.remove('hidden');
+    if (updateMsg) updateMsg.textContent = `Version ${data.version || ''} is ready!`;
+    restartBtn.textContent = 'Restart to Update';
+    restartBtn.disabled = false;
   } else if (data.type === 'none' || data.type === 'error') {
     updateBanner.classList.add('hidden');
   }

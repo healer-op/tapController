@@ -20,7 +20,7 @@ function randomFunnyName() {
 // ── Config (persisted) ────────────────────────────────────────────────────────
 const cfg = {
   name:    localStorage.getItem('tc_name')    || '',
-  mode:    'gamepad',
+  mode:    localStorage.getItem('tc_mode')    || 'standard',
   gyro:    localStorage.getItem('tc_gyro')    === '1',
   haptic:  localStorage.getItem('tc_haptic')  !== '0',
   consent: localStorage.getItem('tc_consent') === '1',
@@ -264,7 +264,7 @@ function connect() {
     connected = true;
     overlay.classList.add('hidden');
     if (cfg.name) send({ type: 'name', value: cfg.name });
-    if (cfg.gyro) requestGyro();
+    if (cfg.gyro) motion.enable();
   });
 
   ws.addEventListener('message', (e) => {
@@ -681,16 +681,19 @@ function applyControllerMode() {
   const mode = cfg.mode || 'standard';
   const controller = document.getElementById('controller');
   controller.innerHTML = CONTROLLER_TEMPLATES[mode] || CONTROLLER_TEMPLATES.standard;
-  
-  // Re-bind all events
+
+  // Register layout controls for the freshly-created DOM elements.
+  // Must happen before applyLayout so elements get layout-control class + CSS vars.
+  setupLayoutControls();
+
+  // Re-bind all input events
   setupButtons();
   setupStick('left-stick-zone',  'left',  'left-stick-knob');
-  
-  // Check if right stick exists in template (Standard has it, others might not)
+
   if (document.getElementById('right-stick-zone')) {
     setupStick('right-stick-zone', 'right', 'right-stick-knob');
   }
-  
+
   applyLayout();
 }
 
@@ -816,8 +819,7 @@ window.addEventListener('resize', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-setupLayoutControls();
-applyControllerMode(); // This handles buttons, sticks, and applyLayout internally
+applyControllerMode(); // Calls setupLayoutControls + setupButtons + setupStick + applyLayout
 
 // Start the sequence
 checkOrientation();

@@ -95,11 +95,17 @@ if (autoUpdater) {
 
   autoUpdater.on('update-available', (info) => {
     console.log('[Updater] Update available:', info.version);
+    if (info.version === APP_VERSION) {
+      console.log('[Updater] Same version as running app, ignoring.');
+      return;
+    }
     emit('update-status', { type: 'available', version: info.version });
   });
 
   autoUpdater.on('download-progress', (progressObj) => {
-    console.log(`[Updater] Download progress: ${progressObj.percent}%`);
+    const percent = Math.round(progressObj.percent);
+    console.log(`[Updater] Download progress: ${percent}%`);
+    emit('update-status', { type: 'downloading', percent });
   });
 
   autoUpdater.on('update-downloaded', (info) => {

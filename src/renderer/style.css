@@ -247,6 +247,7 @@ html, body {
 }
 .badge--loading { background: var(--surface2); color: var(--text-muted); }
 .badge--ready   { background: rgba(46, 204, 113, 0.1); color: var(--green); border-color: rgba(46, 204, 113, 0.2); }
+.badge--local   { background: rgba(78, 205, 196, 0.1); color: var(--accent2); border-color: rgba(78, 205, 196, 0.2); }
 .badge--error   { background: rgba(231, 76, 60, 0.1); color: var(--red); border-color: rgba(231, 76, 60, 0.2); }
 .update-banner {
   background: linear-gradient(90deg, var(--accent), #5a4ae0);
