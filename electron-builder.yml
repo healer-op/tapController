@@ -29,5 +29,10 @@ extraResources:
     to: bin
     filter:
       - "**/*"
+  - from: tools
+    to: tools
 
-publish: null
+publish:
+  provider: github
+  owner: healer-op
+  repo: tapController

@@ -93,6 +93,11 @@ if (autoUpdater) {
     console.log('Update downloaded');
     emit('update-status', { type: 'ready' });
   });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[Updater] Error:', err);
+    emit('update-status', { type: 'error', message: err.message });
+  });
 }
 
 ipcMain.on('restart-app', () => {
