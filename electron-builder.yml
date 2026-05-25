@@ -13,6 +13,7 @@ files:
   - "!src/phone/**/*.map"
 
 win:
+  artifactName: "tapController-setup-${version}.${ext}"
   target:
     - target: nsis
       arch: x64

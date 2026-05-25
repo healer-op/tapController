@@ -64,6 +64,7 @@ const playerSlots = Array(MAX_PLAYERS).fill(null);
 let globalEmit = null;
 let activeWss = null;
 let activeHttpServer = null;
+let heartbeatInterval = null;
 
 function allocateSlot(id) {
   const slot = playerSlots.findIndex((existing) => existing === null);
@@ -158,30 +159,72 @@ function createServer(port, token, emit) {
   });
   activeWss = wss;
 
-  wss.on('connection', (ws, req) => {
-    const id   = uuidv4();
-    const name = randomFunnyName();
-    const slot = allocateSlot(id);
+  heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (ws.isAlive === false) return ws.terminate();
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
 
-    if (slot === -1) {
-      ws.close(1013, 'Controller slots full');
-      return;
+  wss.on('connection', (ws, req) => {
+    const url = new URL(req.url, `http://localhost`);
+    const requestedId = url.searchParams.get('clientId');
+    
+    let id, name, slot, isResumed = false;
+    const existing = requestedId ? clients.get(requestedId) : null;
+
+    if (existing) {
+      // Resume existing session
+      id = requestedId;
+      name = existing.name;
+      slot = existing.slot - 1;
+      isResumed = true;
+      
+      // Terminate old socket if it still exists
+      if (existing.ws && existing.ws !== ws) {
+        try { existing.ws.terminate(); } catch (_) {}
+      }
+      
+      existing.ws = ws;
+      console.log(`[server] Resumed session for ${name} (${id})`);
+    } else {
+      id   = (requestedId && requestedId !== 'null' && requestedId !== 'undefined') ? requestedId : uuidv4();
+      name = randomFunnyName();
+      slot = allocateSlot(id);
+
+      if (slot === -1) {
+        ws.close(1013, 'Controller slots full');
+        return;
+      }
+      console.log(`[server] New session for ${name} (${id})`);
     }
 
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+
     const controllerId = `P${slot + 1}`;
-    clients.set(id, { id, ws, name, slot: slot + 1, controllerId });
+    if (!isResumed) {
+      clients.set(id, { id, ws, name, slot: slot + 1, controllerId });
+    }
 
-
+    // ... (rest of the setup)
+    if (!isResumed) {
+      emit('client-event', { type: 'connected', id, name, slot: slot + 1, controllerId });
+      if (slot === 0) emit('client-event', { type: 'admin-changed', adminId: id });
+      
+      // Initialize controller on Python side
+      handleInput(controllerId, { type: 'connect' });
+    } else {
+      // If resumed, maybe emit a 'resumed' event or just 'connected' to refresh UI
+      emit('client-event', { type: 'connected', id, name, slot: slot + 1, controllerId });
+    }
+    
+    ws.send(JSON.stringify({ type: 'welcome', id, name, slot: slot + 1, controllerId }));
+    
     // Per-client rate limiter: max 120 msgs/sec
     let msgCount  = 0;
     let rlResetAt = Date.now() + 1000;
-
-    emit('client-event', { type: 'connected', id, name, slot: slot + 1, controllerId });
-    if (slot === 0) emit('client-event', { type: 'admin-changed', adminId: id });
-    ws.send(JSON.stringify({ type: 'welcome', id, name, slot: slot + 1, controllerId }));
-    
-    // Initialize controller on Python side
-    handleInput(controllerId, { type: 'connect' });
 
     ws.on('message', (raw) => {
       // Rate limiting
@@ -216,6 +259,8 @@ function createServer(port, token, emit) {
 
     ws.on('close', () => {
       const c = clients.get(id);
+      if (c && c.ws !== ws) return; // Don't clean up if this is an old session being replaced
+
       const controllerId = getControllerId(id) || c?.controllerId;
       clients.delete(id);
       releaseSlot(id);
@@ -228,6 +273,8 @@ function createServer(port, token, emit) {
 
     ws.on('error', () => {
       const c = clients.get(id);
+      if (c && c.ws !== ws) return; // Don't clean up if this is an old session being replaced
+
       const controllerId = getControllerId(id) || c?.controllerId;
       clients.delete(id);
       releaseSlot(id);
@@ -248,6 +295,10 @@ function createServer(port, token, emit) {
 }
 
 function closeServer() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
   // Terminate every active WebSocket client so the HTTP server can close cleanly
   if (clients) {
     for (const client of clients.values()) {

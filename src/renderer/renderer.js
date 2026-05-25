@@ -30,42 +30,44 @@ savePortBtn.addEventListener('click', async () => {
 });
 
 // ── Update Management ─────────────────────────────────────────────────────────
-const updateBanner = document.getElementById('update-banner');
-const restartBtn   = document.getElementById('restart-app-btn');
-const updateMsg    = updateBanner?.querySelector('.update-msg');
-
-function showBanner() {
-  updateBanner.classList.remove('hidden');
-  document.body.classList.add('has-update');
-}
-
-function hideBanner() {
-  updateBanner.classList.add('hidden');
-  document.body.classList.remove('has-update');
-}
+const restartBtn     = document.getElementById('restart-app-btn');
+const checkUpdateBtn = document.getElementById('check-update-btn');
+const updateMsg      = document.getElementById('update-msg');
 
 window.api.onUpdateStatus((data) => {
   if (data.type === 'checking') {
-    // Optional: show checking state if needed
-    console.log('[Updater] Checking for updates...');
+    updateMsg.textContent = 'Checking for updates...';
+    checkUpdateBtn.disabled = true;
   } else if (data.type === 'available') {
-    showBanner();
-    if (updateMsg) updateMsg.textContent = `v${data.version || ''} available — preparing download...`;
+    updateMsg.textContent = `v${data.version || ''} available — preparing download...`;
+    checkUpdateBtn.classList.add('hidden');
+    restartBtn.classList.remove('hidden');
     restartBtn.textContent = 'Downloading...';
     restartBtn.disabled = true;
   } else if (data.type === 'downloading') {
-    showBanner();
-    if (updateMsg) updateMsg.textContent = `Downloading update... ${data.percent}%`;
-    restartBtn.textContent = `${data.percent}%`;
+    updateMsg.textContent = `Downloading update... ${data.percent}%`;
+    restartBtn.classList.remove('hidden');
+    restartBtn.textContent = `Downloading... ${data.percent}%`;
     restartBtn.disabled = true;
   } else if (data.type === 'ready') {
-    showBanner();
-    if (updateMsg) updateMsg.textContent = `Version ${data.version || ''} is ready!`;
+    updateMsg.textContent = `Version ${data.version || ''} is ready!`;
+    restartBtn.classList.remove('hidden');
     restartBtn.textContent = 'Restart to Update';
     restartBtn.disabled = false;
-  } else if (data.type === 'none' || data.type === 'error') {
-    hideBanner();
+  } else if (data.type === 'none') {
+    updateMsg.textContent = 'You are on the latest version.';
+    checkUpdateBtn.disabled = false;
+    checkUpdateBtn.classList.remove('hidden');
+    restartBtn.classList.add('hidden');
+  } else if (data.type === 'error') {
+    updateMsg.textContent = 'Update check failed.';
+    checkUpdateBtn.disabled = false;
+    checkUpdateBtn.classList.remove('hidden');
   }
+});
+
+checkUpdateBtn.addEventListener('click', () => {
+  window.api.checkUpdate();
 });
 
 restartBtn.addEventListener('click', () => window.api.restartApp());

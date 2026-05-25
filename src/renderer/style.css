@@ -249,43 +249,23 @@ html, body {
 .badge--ready   { background: rgba(46, 204, 113, 0.1); color: var(--green); border-color: rgba(46, 204, 113, 0.2); }
 .badge--local   { background: rgba(78, 205, 196, 0.1); color: var(--accent2); border-color: rgba(78, 205, 196, 0.2); }
 .badge--error   { background: rgba(231, 76, 60, 0.1); color: var(--red); border-color: rgba(231, 76, 60, 0.2); }
-.update-banner {
-  position: fixed;
-  top: 38px; /* sits flush below the custom titlebar */
-  left: 0;
-  right: 0;
-  z-index: 200;
-  background: linear-gradient(90deg, var(--accent), #5a4ae0);
-  padding: 10px 24px;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  animation: slideInDown 0.4s ease;
-  box-shadow: 0 3px 15px var(--accent-glow);
-}
 
-/* Push app content down when the update banner is visible */
-body.has-update .app {
-  padding-top: calc(24px + 44px);
-}
-
-@keyframes slideInDown {
-  from { transform: translateY(-20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.update-msg { font-weight: 700; font-size: 13px; color: white; }
 .update-btn {
-  background: white;
-  color: var(--accent);
+  background: var(--accent);
+  color: white;
   border: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 800;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
+.update-btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+.update-btn:active:not(:disabled) { transform: translateY(0); }
+.update-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+.update-btn.hidden { display: none; }
 
 /* ── Main grid ───────────────────────────────────────────────────────────── */
 .main {

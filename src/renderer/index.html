@@ -64,18 +64,25 @@
         <div class="about-feature-row"><span class="about-feat-icon">📐</span><span>Gyroscope &amp; multi-player support</span></div>
       </div>
       <div class="about-divider"></div>
+
+      <div class="settings-group-desktop" style="margin-top: 10px;">
+        <label class="settings-label" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 800;">Updates</label>
+        <div class="update-section" style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span id="update-msg" style="font-size: 13px; color: var(--text-muted);">Check for the latest version</span>
+            <button id="check-update-btn" class="copy-btn" title="Check for Updates" style="font-size: 12px; width: auto; padding: 0 10px; height: 32px;">Check</button>
+          </div>
+          <button id="restart-app-btn" class="update-btn hidden" style="width: 100%; margin: 0;">Restart to Update</button>
+        </div>
+      </div>
+
+      <div class="about-divider"></div>
       <p class="about-made">Made with ❤️ by <strong>@healer-op</strong></p>
       <p class="about-stack">Built with Electron · Node.js · ViGEm · Cloudflared</p>
     </div>
   </div>
 
   <div class="app">
-    <!-- Update Notification -->
-    <div id="update-banner" class="update-banner hidden">
-      <span class="update-msg">New version available!</span>
-      <button id="restart-app-btn" class="update-btn">Restart to Update</button>
-    </div>
-
     <!-- Header -->
     <header class="header">
       <img src="../assets/logo.png" class="logo-main" alt="TapController Logo">

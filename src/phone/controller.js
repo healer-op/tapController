@@ -19,6 +19,7 @@ function randomFunnyName() {
 
 // ── Config (persisted) ────────────────────────────────────────────────────────
 const cfg = {
+  id:       localStorage.getItem('tc_client_id') || '',
   name:     localStorage.getItem('tc_name')     || '',
   template: localStorage.getItem('tc_template') || 'standard', // controller layout template
   mode:     'gamepad',                                          // protocol mode, always gamepad
@@ -243,7 +244,7 @@ const TOKEN = new URLSearchParams(location.search).get('token') || '';
 
 function getWsUrl() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}/?token=${encodeURIComponent(TOKEN)}`;
+  return `${proto}://${location.host}/?token=${encodeURIComponent(TOKEN)}&clientId=${cfg.id}`;
 }
 
 function initConnection() {
@@ -271,10 +272,16 @@ function connect() {
   ws.addEventListener('message', (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'welcome' && !cfg.name) {
-        cfg.name = msg.name || randomFunnyName();
-        localStorage.setItem('tc_name', cfg.name);
-        document.getElementById('player-name').value = cfg.name;
+      if (msg.type === 'welcome') {
+        if (!cfg.id) {
+          cfg.id = msg.id;
+          localStorage.setItem('tc_client_id', cfg.id);
+        }
+        if (!cfg.name) {
+          cfg.name = msg.name || randomFunnyName();
+          localStorage.setItem('tc_name', cfg.name);
+          document.getElementById('player-name').value = cfg.name;
+        }
       }
     } catch (_) {}
   });
