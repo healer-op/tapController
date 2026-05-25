@@ -19,14 +19,15 @@ function randomFunnyName() {
 
 // ── Config (persisted) ────────────────────────────────────────────────────────
 const cfg = {
-  name:    localStorage.getItem('tc_name')    || '',
-  mode:    localStorage.getItem('tc_mode')    || 'standard',
-  gyro:    localStorage.getItem('tc_gyro')    === '1',
-  haptic:  localStorage.getItem('tc_haptic')  !== '0',
-  consent: localStorage.getItem('tc_consent') === '1',
-  scale:   parseFloat(localStorage.getItem('tc_scale')) || 1.0,
-  pos:     localStorage.getItem('tc_pos') || 'default',
-  layout:  readSavedLayout(),
+  name:     localStorage.getItem('tc_name')     || '',
+  template: localStorage.getItem('tc_template') || 'standard', // controller layout template
+  mode:     'gamepad',                                          // protocol mode, always gamepad
+  gyro:     localStorage.getItem('tc_gyro')     === '1',
+  haptic:   localStorage.getItem('tc_haptic')   !== '0',
+  consent:  localStorage.getItem('tc_consent')  === '1',
+  scale:    parseFloat(localStorage.getItem('tc_scale')) || 1.0,
+  pos:      localStorage.getItem('tc_pos') || 'default',
+  layout:   readSavedLayout(),
 };
 
 function applyLayout() {
@@ -295,7 +296,7 @@ function connect() {
 
 function send(obj) {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ ...obj, mode: cfg.mode }));
+    ws.send(JSON.stringify({ ...obj, mode: 'gamepad' }));
   }
 }
 
@@ -678,7 +679,7 @@ const CONTROLLER_TEMPLATES = {
 };
 
 function applyControllerMode() {
-  const mode = cfg.mode || 'standard';
+  const mode = cfg.template || 'standard';
   const controller = document.getElementById('controller');
   controller.innerHTML = CONTROLLER_TEMPLATES[mode] || CONTROLLER_TEMPLATES.standard;
 
@@ -705,27 +706,27 @@ function openSettings() {
     document.getElementById('haptic-toggle').checked = cfg.haptic;
     document.getElementById('layout-scale').value = cfg.scale;
     document.getElementById('stick-pos-select').value = cfg.pos;
-    document.getElementById('controller-mode-select').value = cfg.mode || 'standard';
+    document.getElementById('controller-mode-select').value = cfg.template || 'standard';
     settingsPanel.classList.remove('hidden');
   }, 200);
 }
 
 async function saveSettings(options = {}) {
-  const oldGyro = cfg.gyro;
-  const oldMode = cfg.mode;
-  cfg.name   = document.getElementById('player-name').value.trim() || randomFunnyName();
-  cfg.gyro   = document.getElementById('gyro-toggle').checked;
-  cfg.haptic = document.getElementById('haptic-toggle').checked;
-  cfg.scale  = parseFloat(document.getElementById('layout-scale').value);
-  cfg.pos    = document.getElementById('stick-pos-select').value;
-  cfg.mode   = document.getElementById('controller-mode-select').value;
-  
-  localStorage.setItem('tc_name',   cfg.name);
-  localStorage.setItem('tc_gyro',   cfg.gyro   ? '1' : '0');
-  localStorage.setItem('tc_haptic', cfg.haptic  ? '1' : '0');
-  localStorage.setItem('tc_scale',  cfg.scale);
-  localStorage.setItem('tc_pos',    cfg.pos);
-  localStorage.setItem('tc_mode',   cfg.mode);
+  const oldGyro     = cfg.gyro;
+  const oldTemplate = cfg.template;
+  cfg.name     = document.getElementById('player-name').value.trim() || randomFunnyName();
+  cfg.gyro     = document.getElementById('gyro-toggle').checked;
+  cfg.haptic   = document.getElementById('haptic-toggle').checked;
+  cfg.scale    = parseFloat(document.getElementById('layout-scale').value);
+  cfg.pos      = document.getElementById('stick-pos-select').value;
+  cfg.template = document.getElementById('controller-mode-select').value;
+
+  localStorage.setItem('tc_name',     cfg.name);
+  localStorage.setItem('tc_gyro',     cfg.gyro     ? '1' : '0');
+  localStorage.setItem('tc_haptic',   cfg.haptic   ? '1' : '0');
+  localStorage.setItem('tc_scale',    cfg.scale);
+  localStorage.setItem('tc_pos',      cfg.pos);
+  localStorage.setItem('tc_template', cfg.template);
   
   if (cfg.name && connected) send({ type: 'name', value: cfg.name });
   
@@ -736,7 +737,7 @@ async function saveSettings(options = {}) {
     motion.disable();
   }
   
-  if (cfg.mode !== oldMode) {
+  if (cfg.template !== oldTemplate) {
     applyControllerMode();
   } else {
     applyLayout();
@@ -774,12 +775,34 @@ let splashDone          = false;
 function checkOrientation() {
   const isLandscape = window.innerWidth > window.innerHeight;
   
-  if (!isLandscape) {
-    orientationPrompt.classList.remove('hidden');
-    return;
+  if (isLandscape) {
+    // If we are in landscape but haven't given consent, we MUST show a prompt or stay hidden
+    if (!cfg.consent && splashDone) {
+      setOverlay('📱', 'Rotate to Portrait', 'Please rotate to portrait to review agreement');
+      overlay.classList.remove('hidden');
+      orientationPrompt.classList.add('hidden');
+      return;
+    }
+    
+    // Only show orientation prompt if consent is given but they rotate back to portrait 
+    // Wait, if they ARE in landscape, we HIDE the prompt.
+    orientationPrompt.classList.add('hidden');
+    if (splashDone && cfg.consent) {
+       overlay.classList.add('hidden');
+    }
+  } else {
+    // Portrait mode
+    if (splashDone) {
+      if (!cfg.consent) {
+        showConsent();
+        orientationPrompt.classList.add('hidden');
+      } else {
+        // Consent given, but in portrait -> show the landscape required prompt
+        orientationPrompt.classList.remove('hidden');
+        consentScreen.classList.add('hidden');
+      }
+    }
   }
-  
-  orientationPrompt.classList.add('hidden');
   
   // If we haven't shown the splash yet, show it now
   if (!splashDone) {
@@ -797,9 +820,15 @@ async function showPhoneSplash() {
     setTimeout(() => {
       phoneSplash.classList.add('hidden');
       splashDone = true;
-      // After splash, show consent if needed, or start connection
+      
+      const isLandscape = window.innerWidth > window.innerHeight;
       if (!cfg.consent) {
-        showConsent();
+        if (isLandscape) {
+           setOverlay('📱', 'Rotate to Portrait', 'Please rotate to portrait to review agreement');
+           overlay.classList.remove('hidden');
+        } else {
+           showConsent();
+        }
       } else {
         if (!cfg.name) {
           cfg.name = randomFunnyName();

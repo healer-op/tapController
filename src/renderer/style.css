@@ -250,15 +250,24 @@ html, body {
 .badge--local   { background: rgba(78, 205, 196, 0.1); color: var(--accent2); border-color: rgba(78, 205, 196, 0.2); }
 .badge--error   { background: rgba(231, 76, 60, 0.1); color: var(--red); border-color: rgba(231, 76, 60, 0.2); }
 .update-banner {
+  position: fixed;
+  top: 38px; /* sits flush below the custom titlebar */
+  left: 0;
+  right: 0;
+  z-index: 200;
   background: linear-gradient(90deg, var(--accent), #5a4ae0);
-  padding: 10px 20px;
-  border-radius: 12px;
+  padding: 10px 24px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
   animation: slideInDown 0.4s ease;
-  box-shadow: 0 4px 15px var(--accent-glow);
+  box-shadow: 0 3px 15px var(--accent-glow);
+}
+
+/* Push app content down when the update banner is visible */
+body.has-update .app {
+  padding-top: calc(24px + 44px);
 }
 
 @keyframes slideInDown {

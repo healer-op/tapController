@@ -34,24 +34,37 @@ const updateBanner = document.getElementById('update-banner');
 const restartBtn   = document.getElementById('restart-app-btn');
 const updateMsg    = updateBanner?.querySelector('.update-msg');
 
+function showBanner() {
+  updateBanner.classList.remove('hidden');
+  document.body.classList.add('has-update');
+}
+
+function hideBanner() {
+  updateBanner.classList.add('hidden');
+  document.body.classList.remove('has-update');
+}
+
 window.api.onUpdateStatus((data) => {
-  if (data.type === 'available') {
-    updateBanner.classList.remove('hidden');
+  if (data.type === 'checking') {
+    // Optional: show checking state if needed
+    console.log('[Updater] Checking for updates...');
+  } else if (data.type === 'available') {
+    showBanner();
     if (updateMsg) updateMsg.textContent = `v${data.version || ''} available — preparing download...`;
     restartBtn.textContent = 'Downloading...';
     restartBtn.disabled = true;
   } else if (data.type === 'downloading') {
-    updateBanner.classList.remove('hidden');
+    showBanner();
     if (updateMsg) updateMsg.textContent = `Downloading update... ${data.percent}%`;
     restartBtn.textContent = `${data.percent}%`;
     restartBtn.disabled = true;
   } else if (data.type === 'ready') {
-    updateBanner.classList.remove('hidden');
+    showBanner();
     if (updateMsg) updateMsg.textContent = `Version ${data.version || ''} is ready!`;
     restartBtn.textContent = 'Restart to Update';
     restartBtn.disabled = false;
   } else if (data.type === 'none' || data.type === 'error') {
-    updateBanner.classList.add('hidden');
+    hideBanner();
   }
 });
 
@@ -119,6 +132,12 @@ function handleStatus(data) {
       statusBadge.className   = 'badge badge--local';
       tunnelBtn.disabled = false;
       refreshQR();
+      break;
+
+    case 'server-error':
+      statusBadge.textContent = 'Error';
+      statusBadge.className   = 'badge badge--error';
+      alert('Server Error: ' + data.message);
       break;
 
     case 'tunnel-ready':

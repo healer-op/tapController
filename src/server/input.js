@@ -113,8 +113,17 @@ function handleInput(clientId, msg) {
 function stopHelper() {
   if (helperProc) {
     try {
+      console.log('[input] Stopping helper process...');
       helperProc.stdin.end();
+      // On Windows, SIGTERM is often enough, but let's be sure.
       helperProc.kill('SIGTERM');
+      
+      const procToKill = helperProc;
+      setTimeout(() => {
+        if (procToKill && !procToKill.killed) {
+          try { procToKill.kill('SIGKILL'); } catch (_) {}
+        }
+      }, 1000).unref();
     } catch (e) {
       console.error('[input] Error killing helper:', e);
     }

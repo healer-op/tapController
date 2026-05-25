@@ -27,9 +27,12 @@
   <!-- Consent screen (shown on first use) -->
   <div id="consent-screen" class="consent-screen hidden">
     <div class="consent-card">
-      <div class="consent-icon">🎮</div>
-      <h1 class="consent-title">TapController</h1>
-      <p class="consent-sub">Before connecting, please review:</p>
+      <div class="consent-header-group">
+        <div class="consent-icon">🎮</div>
+        <h1 class="consent-title">TapController</h1>
+        <p class="consent-sub">Before connecting, please review:</p>
+      </div>
+      
       <ul class="consent-list">
         <li>
           <span class="consent-item-icon">📡</span>
@@ -48,8 +51,11 @@
           <span>Only connect to PCs you own or trust</span>
         </li>
       </ul>
-      <button id="consent-agree" class="consent-btn">I Agree &amp; Connect</button>
-      <p class="consent-fine">You can disconnect at any time by closing this page.</p>
+
+      <div class="consent-footer-group">
+        <button id="consent-agree" class="consent-btn">I Agree &amp; Connect</button>
+        <p class="consent-fine">You can disconnect at any time by closing this page.</p>
+      </div>
     </div>
   </div>
 

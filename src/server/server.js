@@ -62,6 +62,8 @@ function randomFunnyName() {
 const clients = new Map();
 const playerSlots = Array(MAX_PLAYERS).fill(null);
 let globalEmit = null;
+let activeWss = null;
+let activeHttpServer = null;
 
 function allocateSlot(id) {
   const slot = playerSlots.findIndex((existing) => existing === null);
@@ -139,6 +141,7 @@ function createServer(port, token, emit) {
   app.use((_req, res) => res.status(404).end());
 
   // ── WebSocket server ─────────────────────────────────────────────────────
+  activeHttpServer = httpServer;
   const wss = new WebSocketServer({
     server: httpServer,
     // Validate token on upgrade — reject unauthorized connections
@@ -153,6 +156,7 @@ function createServer(port, token, emit) {
       }
     },
   });
+  activeWss = wss;
 
   wss.on('connection', (ws, req) => {
     const id   = uuidv4();
@@ -231,12 +235,43 @@ function createServer(port, token, emit) {
     });
   });
 
-  httpServer.listen(port);
+  httpServer.on('error', (err) => {
+    console.error('[server] HTTP server error:', err);
+    if (globalEmit) globalEmit('status', { type: 'server-error', message: err.message });
+  });
+
+  httpServer.listen(port, '0.0.0.0', () => {
+    console.log(`[server] HTTP server listening on 0.0.0.0:${port}`);
+  });
+
   return httpServer;
+}
+
+function closeServer() {
+  // Terminate every active WebSocket client so the HTTP server can close cleanly
+  if (clients) {
+    for (const client of clients.values()) {
+      try { 
+        if (client.ws) client.ws.terminate(); 
+      } catch (_) {}
+    }
+    clients.clear();
+  }
+
+  if (activeWss) {
+    try { activeWss.close(); } catch (_) {}
+    activeWss = null;
+  }
+
+  if (activeHttpServer) {
+    try { activeHttpServer.close(); } catch (_) {}
+    activeHttpServer = null;
+  }
 }
 
 module.exports = {
   createServer,
+  closeServer,
   clients,
   setAdmin,
   getAdmin: () => playerSlots[0],

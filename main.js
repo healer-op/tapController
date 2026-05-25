@@ -3,6 +3,11 @@ const { randomBytes } = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
+// ── App ID for Windows ───────────────────────────────────────────────────────
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.tapcontroller.app');
+}
+
 // ── Unified App Version ───────────────────────────────────────────────────────
 const APP_VERSION = app.getVersion();
 
@@ -82,10 +87,23 @@ function createMainWindow() {
   mainWindow.loadFile('src/renderer/index.html');
 }
 
+// ── Version Comparison Helper ────────────────────────────────────────────────
+function isNewer(current, latest) {
+  if (!latest) return false;
+  const c = current.replace(/^v/, '').split('.').map(n => parseInt(n) || 0);
+  const l = latest.replace(/^v/, '').split('.').map(n => parseInt(n) || 0);
+  for (let i = 0; i < 3; i++) {
+    if (l[i] > (c[i] || 0)) return true;
+    if (l[i] < (c[i] || 0)) return false;
+  }
+  return false;
+}
+
 // ── Update Logic ──────────────────────────────────────────────────────────────
 if (autoUpdater) {
   autoUpdater.on('checking-for-update', () => {
     console.log('[Updater] Checking for update...');
+    emit('update-status', { type: 'checking' });
   });
 
   autoUpdater.on('update-not-available', (info) => {
@@ -95,8 +113,9 @@ if (autoUpdater) {
 
   autoUpdater.on('update-available', (info) => {
     console.log('[Updater] Update available:', info.version);
-    if (info.version === APP_VERSION) {
-      console.log('[Updater] Same version as running app, ignoring.');
+    if (!isNewer(APP_VERSION, info.version)) {
+      console.log('[Updater] Same or older version found, ignoring.');
+      emit('update-status', { type: 'none' });
       return;
     }
     emit('update-status', { type: 'available', version: info.version });
@@ -110,6 +129,11 @@ if (autoUpdater) {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log('[Updater] Update downloaded:', info.version);
+    if (!isNewer(APP_VERSION, info.version)) {
+      console.log('[Updater] Same or older version downloaded, ignoring.');
+      emit('update-status', { type: 'none' });
+      return;
+    }
     emit('update-status', { type: 'ready', version: info.version });
   });
 
@@ -119,13 +143,54 @@ if (autoUpdater) {
   });
 }
 
+ipcMain.handle('check-update', async () => {
+  if (!app.isPackaged || !autoUpdater) return { ok: false, error: 'Updater not available' };
+  try {
+    await autoUpdater.checkForUpdatesAndNotify();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 let isQuittingForUpdate = false;
+let cleanupDone = false;
+
+function cleanup() {
+  if (cleanupDone) return;
+  cleanupDone = true;
+  console.log('[App] Cleaning up services...');
+
+  if (tunnelStop) {
+    try { tunnelStop(); } catch (e) { console.error('[App] Tunnel stop error:', e); }
+    tunnelStop = null;
+  }
+
+  try {
+    const { stopTunnel } = require('./src/server/tunnel');
+    stopTunnel();
+  } catch (e) { console.error('[App] stopTunnel error:', e); }
+
+  try {
+    const { closeServer } = require('./src/server/server');
+    closeServer();
+  } catch (e) { console.error('[App] closeServer error:', e); }
+
+  try {
+    const { stopHelper } = require('./src/server/input');
+    stopHelper();
+  } catch (e) { console.error('[App] stopHelper error:', e); }
+
+  console.log('[App] All services stopped.');
+}
+
+app.on('before-quit', () => {
+  cleanup();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' && !isQuittingForUpdate) {
-    if (tunnelStop) tunnelStop();
-    if (httpServer) httpServer.close();
     app.quit();
   }
 });
@@ -133,12 +198,7 @@ app.on('window-all-closed', () => {
 ipcMain.on('restart-app', () => {
   console.log('[Updater] Restart requested. isPackaged:', app.isPackaged);
   isQuittingForUpdate = true;
-  
-  // Manual cleanup before abrupt exit
-  if (tunnelStop) tunnelStop();
-  if (httpServer) httpServer.close();
-  const { stopHelper } = require('./src/server/input');
-  stopHelper();
+  cleanup();
 
   if (autoUpdater) {
     try {
@@ -162,7 +222,10 @@ ipcMain.on('window-maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
   else mainWindow?.maximize();
 });
-ipcMain.on('window-close', () => mainWindow?.close());
+ipcMain.on('window-close', () => {
+  cleanup();
+  mainWindow?.close();
+});
 
 function emit(event, data) {
   if (mainWindow?.webContents && !mainWindow.webContents.isDestroyed()) {
@@ -175,13 +238,14 @@ app.whenReady().then(async () => {
   createSplash();
   createMainWindow();
 
-  // Check for updates during splash
-  if (app.isPackaged && autoUpdater) {
-    autoUpdater.checkForUpdatesAndNotify().catch(e => console.error('Update check failed:', e));
-  }
-
   // Register BEFORE any await so we never miss did-finish-load if page loads fast.
-  mainWindow.webContents.once('did-finish-load', () => sendServerReady());
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (port) sendServerReady();
+    // Check for updates after UI is ready
+    if (app.isPackaged && autoUpdater) {
+      autoUpdater.checkForUpdatesAndNotify().catch(e => console.error('Update check failed:', e));
+    }
+  });
 
   // Pipe renderer console to Node stdout
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -197,10 +261,17 @@ app.whenReady().then(async () => {
 
   const { findFreePort } = require('./src/server/port-finder');
   const { createServer } = require('./src/server/server');
-  const { handleInput, stopHelper } = require('./src/server/input');
 
-  // Try to use the configured port first
-  port       = await findFreePort(port);
+  // PREFETCH: Find a free port before starting
+  const oldPort = port;
+  port = await findFreePort(port);
+  
+  // If the port changed, persist it immediately
+  if (port !== oldPort) {
+    config.port = port;
+    try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(config)); } catch(e){}
+  }
+
   httpServer = createServer(port, TOKEN, emit);
   console.log(`[server] Listening on port ${port}`);
 
@@ -209,26 +280,15 @@ app.whenReady().then(async () => {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
     mainWindow.show();
     mainWindow.focus();
+    sendServerReady(); // Ensure renderer is in sync after show
   }, 2500);
 });
 
 // ── Final Cleanup ─────────────────────────────────────────────────────────────
-app.on('will-quit', () => {
-  console.log('[App] Quitting... Cleaning up tasks.');
-  const { stopHelper } = require('./src/server/input');
-  const { stopTunnel } = require('./src/server/tunnel');
-
-  if (tunnelStop) {
-    try { tunnelStop(); } catch (e) { console.error('Error stopping tunnel:', e); }
-  } else {
-    try { stopTunnel(); } catch (e) { console.error('Error stopping tunnel:', e); }
-  }
-
-  if (httpServer) {
-    try { httpServer.close(); } catch (e) { console.error('Error closing server:', e); }
-  }
-
-  try { stopHelper(); } catch (e) { console.error('Error stopping helper:', e); }
+app.on('will-quit', (e) => {
+  cleanup();
+  // Safety net: force-exit after 3 s if any service hangs
+  setTimeout(() => process.exit(0), 3000).unref();
 });
 
 function sendServerReady() {
@@ -238,7 +298,7 @@ function sendServerReady() {
 }
 
 function buildUrl(base) {
-  return `${base}/controller?token=${TOKEN}`;
+  return `${base}/controller/?token=${TOKEN}`;
 }
 
 // ── Port Persistence ──────────────────────────────────────────────────────────

@@ -101,6 +101,8 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  overflow-y: auto; /* Allow scrolling for small screens */
+  touch-action: pan-y; /* Enable touch scrolling */
 }
 
 .consent-card, .overlay-card {
@@ -114,6 +116,12 @@ html, body {
   max-width: 420px;
   text-align: center;
   box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  margin-top: auto;
+  margin-bottom: auto;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
 }
 
 .consent-icon, .overlay-icon { font-size: 56px; margin-bottom: 20px; filter: drop-shadow(0 0 15px var(--accent-glow)); }

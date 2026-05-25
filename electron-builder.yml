@@ -4,7 +4,7 @@ copyright: Copyright © 2026
 
 directories:
   output: dist
-  buildResources: assets
+  buildResources: src/assets
 
 files:
   - main.js
@@ -16,7 +16,7 @@ win:
   target:
     - target: nsis
       arch: x64
-  icon: assets/icon.ico
+  icon: src/assets/icologo.png
 
 nsis:
   oneClick: false
