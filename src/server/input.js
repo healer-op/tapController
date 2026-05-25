@@ -110,14 +110,26 @@ function handleInput(clientId, msg) {
   send({ ...msg, client_id: clientId });
 }
 
+function stopHelper() {
+  if (helperProc) {
+    try {
+      helperProc.stdin.end();
+      helperProc.kill('SIGTERM');
+    } catch (e) {
+      console.error('[input] Error killing helper:', e);
+    }
+    helperProc = null;
+    helperReady = false;
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 spawnHelper();
 
-process.on('exit', () => {
-  if (helperProc) {
-    helperProc.stdin.end();
-    helperProc.kill();
-  }
-});
+process.on('exit', stopHelper);
 
-module.exports = { handleInput, getStatus: () => ({ helperViGEm, helperReady }) };
+module.exports = { 
+  handleInput, 
+  stopHelper,
+  getStatus: () => ({ helperViGEm, helperReady }) 
+};

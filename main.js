@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 // ── Unified App Version ───────────────────────────────────────────────────────
-const APP_VERSION = '1.0.0';
+const APP_VERSION = app.getVersion();
 
 // ── Auto-Updater (Optional Dependency) ────────────────────────────────────────
 let autoUpdater = null;
@@ -113,8 +113,41 @@ if (autoUpdater) {
   });
 }
 
+// ── Cleanup ───────────────────────────────────────────────────────────────────
+let isQuittingForUpdate = false;
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin' && !isQuittingForUpdate) {
+    if (tunnelStop) tunnelStop();
+    if (httpServer) httpServer.close();
+    app.quit();
+  }
+});
+
 ipcMain.on('restart-app', () => {
-  autoUpdater?.quitAndInstall();
+  console.log('[Updater] Restart requested. isPackaged:', app.isPackaged);
+  isQuittingForUpdate = true;
+  
+  // Manual cleanup before abrupt exit
+  if (tunnelStop) tunnelStop();
+  if (httpServer) httpServer.close();
+  const { stopHelper } = require('./src/server/input');
+  stopHelper();
+
+  if (autoUpdater) {
+    try {
+      console.log('[Updater] Calling quitAndInstall...');
+      autoUpdater.quitAndInstall(false, true);
+    } catch (err) {
+      console.error('[Updater] Failed to quitAndInstall:', err);
+      app.relaunch();
+      app.exit(0);
+    }
+  } else {
+    console.warn('[Updater] autoUpdater not available, just relaunching.');
+    app.relaunch();
+    app.exit(0);
+  }
 });
 
 // ── Window Controls IPC ───────────────────────────────────────────────────────
@@ -158,7 +191,7 @@ app.whenReady().then(async () => {
 
   const { findFreePort } = require('./src/server/port-finder');
   const { createServer } = require('./src/server/server');
-  const { handleInput } = require('./src/server/input');
+  const { handleInput, stopHelper } = require('./src/server/input');
 
   // Try to use the configured port first
   port       = await findFreePort(port);
@@ -171,6 +204,25 @@ app.whenReady().then(async () => {
     mainWindow.show();
     mainWindow.focus();
   }, 2500);
+});
+
+// ── Final Cleanup ─────────────────────────────────────────────────────────────
+app.on('will-quit', () => {
+  console.log('[App] Quitting... Cleaning up tasks.');
+  const { stopHelper } = require('./src/server/input');
+  const { stopTunnel } = require('./src/server/tunnel');
+
+  if (tunnelStop) {
+    try { tunnelStop(); } catch (e) { console.error('Error stopping tunnel:', e); }
+  } else {
+    try { stopTunnel(); } catch (e) { console.error('Error stopping tunnel:', e); }
+  }
+
+  if (httpServer) {
+    try { httpServer.close(); } catch (e) { console.error('Error closing server:', e); }
+  }
+
+  try { stopHelper(); } catch (e) { console.error('Error stopping helper:', e); }
 });
 
 function sendServerReady() {
@@ -241,11 +293,4 @@ ipcMain.handle('get-server-info', () => {
   if (!port) return null;
   const ip = require('ip');
   return { localUrl: buildUrl(`http://${ip.address()}:${port}`), port, version: APP_VERSION };
-});
-
-// ── Cleanup ───────────────────────────────────────────────────────────────────
-app.on('window-all-closed', () => {
-  if (tunnelStop) tunnelStop();
-  if (httpServer) httpServer.close();
-  app.quit();
 });
