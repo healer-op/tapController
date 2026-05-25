@@ -32,16 +32,22 @@ savePortBtn.addEventListener('click', async () => {
 // ── Update Management ─────────────────────────────────────────────────────────
 const updateBanner = document.getElementById('update-banner');
 const restartBtn   = document.getElementById('restart-app-btn');
+const updateMsg    = updateBanner?.querySelector('.update-msg');
 
 window.api.onUpdateStatus((data) => {
   if (data.type === 'available' || data.type === 'ready') {
     updateBanner.classList.remove('hidden');
     if (data.type === 'ready') {
+      if (updateMsg) updateMsg.textContent = `Version ${data.version || ''} is ready!`;
       restartBtn.textContent = 'Restart to Update';
+      restartBtn.disabled = false;
     } else {
-      restartBtn.textContent = 'Downloading Update...';
+      if (updateMsg) updateMsg.textContent = `Downloading v${data.version || ''}...`;
+      restartBtn.textContent = 'Downloading...';
       restartBtn.disabled = true;
     }
+  } else if (data.type === 'none' || data.type === 'error') {
+    updateBanner.classList.add('hidden');
   }
 });
 

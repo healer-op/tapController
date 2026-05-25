@@ -84,14 +84,27 @@ function createMainWindow() {
 
 // ── Update Logic ──────────────────────────────────────────────────────────────
 if (autoUpdater) {
-  autoUpdater.on('update-available', () => {
-    console.log('Update available');
-    emit('update-status', { type: 'available' });
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[Updater] Checking for update...');
   });
 
-  autoUpdater.on('update-downloaded', () => {
-    console.log('Update downloaded');
-    emit('update-status', { type: 'ready' });
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('[Updater] Update not available:', info.version);
+    emit('update-status', { type: 'none' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[Updater] Update available:', info.version);
+    emit('update-status', { type: 'available', version: info.version });
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    console.log(`[Updater] Download progress: ${progressObj.percent}%`);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[Updater] Update downloaded:', info.version);
+    emit('update-status', { type: 'ready', version: info.version });
   });
 
   autoUpdater.on('error', (err) => {
