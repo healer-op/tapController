@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>TapController</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Orientation Prompt -->
+  <div id="orientation-prompt" class="orientation-prompt">
+    <div class="prompt-content">
+      <div class="rotate-icon">🔄</div>
+      <h2>Landscape Mode Required</h2>
+      <p>Please rotate your phone to start playing.</p>
+    </div>
+  </div>
+
+  <!-- Phone Splash Screen -->
+  <div id="phone-splash" class="phone-splash hidden">
+    <img src="/assets/logo.png" class="splash-logo" alt="Logo">
+  </div>
+
+  <!-- Consent screen (shown on first use) -->
+  <div id="consent-screen" class="consent-screen hidden">
+    <div class="consent-card">
+      <div class="consent-icon">🎮</div>
+      <h1 class="consent-title">TapController</h1>
+      <p class="consent-sub">Before connecting, please review:</p>
+      <ul class="consent-list">
+        <li>
+          <span class="consent-item-icon">📡</span>
+          <span>Your touch inputs will be sent in real-time to the host PC</span>
+        </li>
+        <li>
+          <span class="consent-item-icon">🔒</span>
+          <span>Connection is encrypted and token-authenticated</span>
+        </li>
+        <li>
+          <span class="consent-item-icon">🚫</span>
+          <span>No personal data is collected or stored</span>
+        </li>
+        <li>
+          <span class="consent-item-icon">🤝</span>
+          <span>Only connect to PCs you own or trust</span>
+        </li>
+      </ul>
+      <button id="consent-agree" class="consent-btn">I Agree &amp; Connect</button>
+      <p class="consent-fine">You can disconnect at any time by closing this page.</p>
+    </div>
+  </div>
+
+  <!-- Connection overlay -->
+  <div id="overlay" class="overlay">
+    <div class="overlay-card">
+      <div class="overlay-icon" id="overlay-icon">🎮</div>
+      <div class="overlay-title" id="overlay-title">Connecting...</div>
+      <div class="overlay-sub"   id="overlay-sub">Please wait</div>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" class="settings-panel hidden">
+    <div class="settings-content">
+      <div class="settings-header">
+        <span>Settings</span>
+        <button id="settings-close" class="settings-close">✕</button>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Player Name</label>
+        <div class="name-row">
+          <input id="player-name" class="settings-input name-input" type="text" maxlength="24" placeholder="Enter name">
+          <button id="random-name-btn" class="random-name-btn" title="Random funny name">🎲</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <label class="settings-row-label">
+          <input type="checkbox" id="gyro-toggle"> <span>Use Gyro as Right Stick</span>
+        </label>
+      </div>
+      <div class="settings-group">
+        <label class="settings-row-label">
+          <input type="checkbox" id="haptic-toggle" checked> <span>Haptic Feedback</span>
+        </label>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Controller Mode</label>
+        <select id="controller-mode-select" class="settings-input">
+          <option value="standard">Standard Gamepad</option>
+          <option value="forza">Forza Horizon</option>
+          <option value="ittakes">It Takes Two</option>
+        </select>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Controller Scaling</label>
+        <input type="range" id="layout-scale" min="0.5" max="1.5" step="0.05" value="1" style="width: 100%;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-top:5px;">
+          <span>Small</span><span>Default</span><span>Large</span>
+        </div>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Stick Position (Landscape)</label>
+        <select id="stick-pos-select" class="settings-input">
+          <option value="default">Default (Sides)</option>
+          <option value="centered">Centered</option>
+          <option value="bottom">Bottom Corners</option>
+        </select>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Custom Phone Layout</label>
+        <button id="edit-layout-btn" class="settings-save-btn" style="background: rgba(255,255,255,0.1); margin-bottom: 12px; box-shadow: none; border: 1px solid var(--btn-border);">Move &amp; Scale Buttons</button>
+        <button id="reset-layout-btn" class="settings-save-btn danger-btn">Reset Button Layout</button>
+      </div>
+      <div class="settings-group">
+        <button id="fullscreen-btn" class="settings-save-btn" style="background: rgba(255,255,255,0.1); box-shadow: none; border: 1px solid var(--btn-border);">Toggle Fullscreen</button>
+      </div>
+      <button id="settings-save" class="settings-save-btn">Save &amp; Close</button>
+    </div>
+  </div>
+
+  <div id="layout-editor" class="layout-editor hidden">
+    <button id="layout-done" class="editor-btn">Done</button>
+    <div class="editor-scale">
+      <span id="selected-control-label">Select a button</span>
+      <input type="range" id="selected-control-scale" min="0.6" max="1.8" step="0.05" value="1">
+    </div>
+    <button id="layout-reset" class="editor-btn secondary">Reset</button>
+  </div>
+
+  <!-- Controller layout -->
+  <div id="controller" class="controller">
+    <div class="top-bar">
+      <div class="trigger-group">
+        <button class="trigger-btn" data-id="lt">LT</button>
+        <button class="bumper-btn"  data-id="lb">LB</button>
+      </div>
+      <div class="center-buttons">
+        <button class="sys-btn" data-id="back">⊟</button>
+        <button class="guide-btn" data-id="guide" id="settings-trigger">⬤</button>
+        <button class="sys-btn" data-id="start">⊞</button>
+      </div>
+      <div class="trigger-group">
+        <button class="bumper-btn"  data-id="rb">RB</button>
+        <button class="trigger-btn" data-id="rt">RT</button>
+      </div>
+    </div>
+
+    <div class="bottom-area">
+      <div class="left-zone">
+        <div class="dpad">
+          <button class="dpad-btn dpad-up"    data-id="dpad_up">▲</button>
+          <button class="dpad-btn dpad-left"  data-id="dpad_left">◀</button>
+          <div class="dpad-center"></div>
+          <button class="dpad-btn dpad-right" data-id="dpad_right">▶</button>
+          <button class="dpad-btn dpad-down"  data-id="dpad_down">▼</button>
+        </div>
+        <div class="stick-zone" id="left-stick-zone">
+          <div class="stick-base">
+            <div class="stick-knob" id="left-stick-knob"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-zone">
+        <div class="face-buttons">
+          <button class="face-btn face-y" data-id="y">Y</button>
+          <div class="face-row">
+            <button class="face-btn face-x" data-id="x">X</button>
+            <button class="face-btn face-b" data-id="b">B</button>
+          </div>
+          <button class="face-btn face-a" data-id="a">A</button>
+        </div>
+        <div class="stick-zone" id="right-stick-zone">
+          <div class="stick-base">
+            <div class="stick-knob" id="right-stick-knob"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="controller.js"></script>
+</body>
+</html>

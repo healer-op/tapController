@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TapController</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Custom Titlebar -->
+  <div class="titlebar">
+    <div class="window-controls">
+      <button class="win-btn win-close" id="win-close" title="Close"></button>
+      <button class="win-btn win-min"   id="win-min"   title="Minimize"></button>
+      <button class="win-btn win-max"   id="win-max"   title="Maximize"></button>
+    </div>
+    <div class="titlebar-title">TapController</div>
+  </div>
+
+  <!-- Tunnel consent modal -->
+  <div id="tunnel-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-icon">🌐</div>
+      <h2 class="modal-title">Enable Internet Tunnel?</h2>
+      <p class="modal-body">
+        TapController will create an encrypted tunnel via <strong>Cloudflare Tunnel</strong>,
+        allowing anyone with the QR code link to connect from outside your local network.
+      </p>
+      <ul class="modal-list">
+        <li>✓ End-to-end encrypted via HTTPS</li>
+        <li>✓ Connection authenticated by unique token</li>
+        <li>✓ Tunnel closes when you stop it or exit the app</li>
+        <li>⚠ Only share the QR code with people you trust</li>
+      </ul>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn--cancel" id="tunnel-cancel">Local Only</button>
+        <button class="modal-btn modal-btn--confirm" id="tunnel-confirm">Enable Tunnel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- About modal -->
+  <div id="about-modal" class="modal-backdrop hidden">
+    <div class="modal about-modal">
+      <button class="about-modal-close" id="about-close">✕</button>
+      <div class="modal-icon">🎮</div>
+      <h2 class="modal-title">TapController</h2>
+      <p class="about-version">v1.0.0</p>
+      
+      <div class="settings-group-desktop" style="margin-top: 10px;">
+        <label class="settings-label" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 800;">Server Configuration</label>
+        <div class="url-row" style="margin-top: 8px;">
+          <span class="url-label">Port</span>
+          <input type="number" id="port-input" class="settings-input" style="background:transparent; border:none; color:var(--accent2); width: 80px; font-weight: 800;" min="1024" max="65535">
+          <button class="copy-btn" id="save-port-btn" title="Save Port">💾</button>
+        </div>
+      </div>
+
+      <p class="modal-body" style="margin-top: 10px;">Turn your phone into a wireless game controller for PC.</p>
+      <div class="about-features">
+        <div class="about-feature-row"><span class="about-feat-icon">📡</span><span>Local Wi-Fi &amp; Internet via Cloudflare Tunnel</span></div>
+        <div class="about-feature-row"><span class="about-feat-icon">🔒</span><span>Token-authenticated &amp; rate-limited</span></div>
+        <div class="about-feature-row"><span class="about-feat-icon">🎮</span><span>Xbox-style gamepad emulation via ViGEm</span></div>
+        <div class="about-feature-row"><span class="about-feat-icon">📐</span><span>Gyroscope &amp; multi-player support</span></div>
+      </div>
+      <div class="about-divider"></div>
+      <p class="about-made">Made with ❤️ by <strong>@healer-op</strong></p>
+      <p class="about-stack">Built with Electron · Node.js · ViGEm · Cloudflared</p>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- Update Notification -->
+    <div id="update-banner" class="update-banner hidden">
+      <span class="update-msg">New version available!</span>
+      <button id="restart-app-btn" class="update-btn">Restart to Update</button>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+      <img src="../assets/logo.png" class="logo-main" alt="TapController Logo">
+      <div class="header-right">
+        <div id="status-badge" class="badge badge--loading">Starting...</div>
+        <button id="about-btn" class="about-btn" title="About TapController">ℹ</button>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- Left panel: QR + URLs -->
+      <section class="panel panel--qr">
+        <div class="panel-title">Scan to Connect</div>
+
+        <div class="qr-container privacy-blur" id="qr-privacy-container">
+          <img id="qr-img" class="qr-img" src="" alt="QR Code" style="display:none">
+          <div id="qr-placeholder" class="qr-placeholder">
+            <div class="spinner"></div>
+            <span id="qr-placeholder-text">Starting server...</span>
+          </div>
+        </div>
+
+        <div class="url-group">
+          <div class="url-row">
+            <span class="url-label">Internet</span>
+            <span id="tunnel-url" class="url-value url-value--muted privacy-blur">—</span>
+            <button class="copy-btn" data-target="tunnel-url" title="Copy">⧉</button>
+          </div>
+          <div class="url-row">
+            <span class="url-label">Local Wi-Fi</span>
+            <span id="local-url" class="url-value url-value--muted privacy-blur">—</span>
+            <button class="copy-btn" data-target="local-url" title="Copy">⧉</button>
+          </div>
+        </div>
+
+        <div class="qr-tabs">
+          <button class="tab-btn tab-btn--active" data-mode="internet">Internet QR</button>
+          <button class="tab-btn" data-mode="local">Local Wi-Fi QR</button>
+        </div>
+
+        <!-- Tunnel control -->
+        <div class="tunnel-row">
+          <button id="tunnel-toggle-btn" class="tunnel-btn" disabled>
+            <span class="tunnel-btn-icon">🌐</span>
+            <span id="tunnel-btn-label">Open to Internet</span>
+          </button>
+          <div id="tunnel-status" class="tunnel-status hidden"></div>
+        </div>
+      </section>
+
+      <!-- Right panel: clients + info -->
+      <section class="panel panel--clients">
+        <div class="panel-title">
+          Connected Players
+          <span id="player-count" class="count-badge">0</span>
+        </div>
+
+        <ul id="client-list" class="client-list">
+          <li class="client-empty">No players yet.<br>Scan the QR code to join.</li>
+        </ul>
+
+        <div class="info-box">
+          <div class="info-row">
+            <span class="info-label">Port</span>
+            <span class="info-val" id="port-val">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Token auth</span>
+            <span class="info-val info-val--green">Active</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Rate limiting</span>
+            <span class="info-val info-val--green">120 msg/s</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

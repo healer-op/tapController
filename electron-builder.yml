@@ -1,0 +1,33 @@
+appId: com.tapcontroller.app
+productName: TapController
+copyright: Copyright © 2026
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - main.js
+  - preload.js
+  - src/**/*
+  - "!src/phone/**/*.map"
+
+win:
+  target:
+    - target: nsis
+      arch: x64
+  icon: assets/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+extraResources:
+  - from: node_modules/cloudflared/bin
+    to: bin
+    filter:
+      - "**/*"
+
+publish: null
