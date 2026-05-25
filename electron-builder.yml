@@ -7,6 +7,7 @@ directories:
   buildResources: src/assets
 
 files:
+  - package.json
   - main.js
   - preload.js
   - src/**/*

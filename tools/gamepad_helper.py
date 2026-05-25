@@ -38,6 +38,8 @@ BUTTON_MAP = {
     'dpad_down':   vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN   if VIGEM_OK else None,
     'dpad_left':   vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT   if VIGEM_OK else None,
     'dpad_right':  vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT  if VIGEM_OK else None,
+    'lt':          vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER  if VIGEM_OK else None, # Fallback
+    'rt':          vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER if VIGEM_OK else None, # Fallback
 } if VIGEM_OK else {}
 
 def get_or_create_ctrl(client_id):
@@ -69,6 +71,9 @@ def emit_err(msg):
 def handle(msg):
     t    = msg.get('type')
     cid  = msg.get('client_id', '0')
+    
+    # Verbose logging for debugging
+    sys.stderr.write(f"[helper] Received: {json.dumps(msg)}\\n")
 
     # ── Connect / disconnect ─────────────────────────────────────────────────
     if t == 'connect':

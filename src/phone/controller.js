@@ -144,7 +144,9 @@ function selectControl(el) {
 }
 
 function setupControlDrag(el, id) {
-  let dragging = false;
+  let pointers = new Map(); // id -> { x, y }
+  let startScale = 1;
+  let startDist = 0;
 
   el.addEventListener('pointerdown', (e) => {
     if (!layoutEditing) return;
@@ -152,29 +154,50 @@ function setupControlDrag(el, id) {
     e.stopPropagation();
     ensureLayoutForControl(el, id);
     selectControl(el);
-    dragging = true;
+    
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     el.setPointerCapture(e.pointerId);
+    
+    if (pointers.size === 2) {
+      const p = Array.from(pointers.values());
+      startDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      startScale = cfg.layout[id].scale || 1;
+    }
   }, true);
 
   el.addEventListener('pointermove', (e) => {
-    if (!layoutEditing || !dragging) return;
+    if (!layoutEditing || !pointers.has(e.pointerId)) return;
     e.preventDefault();
     e.stopPropagation();
-    cfg.layout[id].x = clampPercent((e.clientX / window.innerWidth) * 100);
-    cfg.layout[id].y = clampPercent((e.clientY / window.innerHeight) * 100);
+    
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    
+    if (pointers.size === 1) {
+      // Move
+      cfg.layout[id].x = clampPercent((e.clientX / window.innerWidth) * 100);
+      cfg.layout[id].y = clampPercent((e.clientY / window.innerHeight) * 100);
+    } else if (pointers.size === 2) {
+      // Scale (Pinch)
+      const p = Array.from(pointers.values());
+      const dist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      if (startDist > 0) {
+        const scale = startScale * (dist / startDist);
+        cfg.layout[id].scale = Math.max(0.4, Math.min(2.5, scale));
+        document.getElementById('selected-control-scale').value = cfg.layout[id].scale;
+      }
+    }
     applyControlLayout();
   }, true);
 
   const stop = (e) => {
-    if (!dragging) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragging = false;
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) startDist = 0;
     saveControlLayout();
   };
   el.addEventListener('pointerup', stop, true);
   el.addEventListener('pointercancel', stop, true);
 }
+
 
 function startLayoutEditor() {
   saveSettings({ keepOpen: true });
@@ -233,11 +256,18 @@ document.getElementById('consent-agree').addEventListener('click', agreeConsent)
 // ── Connection ────────────────────────────────────────────────────────────────
 let ws = null;
 let reconnectTimer = null;
+let heartbeatTimer = null;
 let connected = false;
 
 const overlayIcon  = document.getElementById('overlay-icon');
 const overlayTitle = document.getElementById('overlay-title');
 const overlaySub   = document.getElementById('overlay-sub');
+const reconnectBtn = document.getElementById('reconnect-btn');
+
+reconnectBtn.addEventListener('click', () => {
+  reconnectBtn.classList.add('hidden');
+  initConnection();
+});
 
 // Extract auth token from page URL (embedded by QR code)
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
@@ -255,6 +285,8 @@ function initConnection() {
 
 function connect() {
   clearTimeout(reconnectTimer);
+  clearInterval(heartbeatTimer);
+  
   if (!TOKEN) {
     setOverlay('🔐', 'No Token', 'Scan the QR code from TapController to connect.');
     return;
@@ -267,6 +299,14 @@ function connect() {
     overlay.classList.add('hidden');
     if (cfg.name) send({ type: 'name', value: cfg.name });
     if (cfg.gyro) motion.enable();
+    requestWakeLock();
+    
+    // Heartbeat to keep tunnel/connection alive
+    heartbeatTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 5000);
   });
 
   ws.addEventListener('message', (e) => {
@@ -288,17 +328,35 @@ function connect() {
 
   ws.addEventListener('close', (e) => {
     connected = false;
-    if (e.code === 4001 || e.code === 1008) {
-      // Unauthorized — bad token
-      setOverlay('🚫', 'Unauthorized', 'Token mismatch. Scan the QR code again.');
+    clearInterval(heartbeatTimer);
+    console.log(`Connection closed: ${e.code} ${e.reason}`);
+    
+    if (e.code === 4001 || e.code === 1008 || e.code === 1011) {
+      setOverlay('🚫', 'Unauthorized', `Token mismatch or server error (Code ${e.code}).`);
       return;
     }
-    setOverlay('🔌', 'Disconnected', 'Reconnecting...');
+    
+    setOverlay('🔌', 'Disconnected', `Connection lost (Code ${e.code}). Reconnecting...`);
+    reconnectBtn.classList.remove('hidden');
     overlay.classList.remove('hidden');
     reconnectTimer = setTimeout(connect, RECONNECT_MS);
   });
 
   ws.addEventListener('error', () => ws.close());
+}
+
+// ── Throttled Sender ──────────────────────────────────────────────────────────
+const lastSent = new Map();
+const THROTTLE_MS = 25; // ~40Hz max for axes/triggers
+
+function sendThrottled(obj) {
+  if (obj.type === 'axis' || obj.type === 'trigger') {
+    const key = `${obj.type}_${obj.id}`;
+    const now = Date.now();
+    if (now - (lastSent.get(key) || 0) < THROTTLE_MS) return;
+    lastSent.set(key, now);
+  }
+  send(obj);
 }
 
 function send(obj) {
@@ -307,11 +365,13 @@ function send(obj) {
   }
 }
 
+
 function setOverlay(icon, title, sub) {
   overlayIcon.textContent  = icon;
   overlayTitle.textContent = title;
   overlaySub.textContent   = sub;
 }
+
 
 // ── Gyro & Motion Handler ─────────────────────────────────────────────────────
 class MotionHandler {
@@ -437,7 +497,7 @@ class MotionHandler {
     outX = Math.max(-1, Math.min(1, Math.abs(outX) < deadzone ? 0 : outX));
     outY = Math.max(-1, Math.min(1, Math.abs(outY) < deadzone ? 0 : outY));
 
-    send({ type: 'axis', id: 'right', x: outX, y: -outY });
+    sendThrottled({ type: 'axis', id: 'right', x: outX, y: -outY });
   }
 }
 
@@ -452,11 +512,12 @@ function haptic(ms = 25) {
 
 // ── Buttons ───────────────────────────────────────────────────────────────────
 function setupButtons() {
+  // Target all elements with data-id that are not sticks or triggers
   document.querySelectorAll('[data-id]').forEach((el) => {
     const id = el.dataset.id;
-    if (el.classList.contains('stick-zone')) return;
-    
-    if (el.id === 'settings-trigger') {
+    if (el.classList.contains('stick-zone') || el.classList.contains('trigger-btn') || el.classList.contains('dpad-btn')) return;
+
+    if (id === 'guide' || el.id === 'settings-trigger') {
       el.addEventListener('pointerdown', (e) => {
         if (!layoutEditing) {
           e.preventDefault();
@@ -464,11 +525,6 @@ function setupButtons() {
         }
       });
       return;
-    }
-    
-    if (el.classList.contains('trigger-btn')) { 
-      setupTrigger(el, id); 
-      return; 
     }
 
     el.addEventListener('pointerdown', (e) => {
@@ -489,10 +545,78 @@ function setupButtons() {
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
   });
+
+  // Specialized D-Pad handling for sliding
+  const dpad = document.querySelector('.dpad');
+  if (dpad) setupDpad(dpad);
+  
+  // Triggers
+  document.querySelectorAll('.trigger-btn').forEach((el) => {
+    setupTrigger(el, el.dataset.id);
+  });
 }
 
+function setupDpad(container) {
+  const buttons = container.querySelectorAll('.dpad-btn');
+  const activePointers = new Map(); // pointerId -> current button id
+
+  const getButtonAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    if (el && el.classList.contains('dpad-btn')) return el;
+    return null;
+  };
+
+  container.addEventListener('pointerdown', (e) => {
+    if (layoutEditing) return;
+    e.preventDefault();
+    container.setPointerCapture(e.pointerId);
+    
+    const btn = getButtonAt(e.clientX, e.clientY);
+    if (btn) {
+      const id = btn.dataset.id;
+      activePointers.set(e.pointerId, id);
+      btn.classList.add('pressed');
+      haptic(15);
+      send({ type: 'button', id, pressed: true });
+    }
+  });
+
+  container.addEventListener('pointermove', (e) => {
+    if (layoutEditing || !activePointers.has(e.pointerId)) return;
+    
+    const oldId = activePointers.get(e.pointerId);
+    const btn = getButtonAt(e.clientX, e.clientY);
+    const newId = btn ? btn.dataset.id : null;
+
+    if (newId !== oldId) {
+      if (oldId) {
+        container.querySelector(`[data-id="${oldId}"]`)?.classList.remove('pressed');
+        send({ type: 'button', id: oldId, pressed: false });
+      }
+      if (newId) {
+        btn.classList.add('pressed');
+        haptic(12);
+        send({ type: 'button', id: newId, pressed: true });
+      }
+      activePointers.set(e.pointerId, newId);
+    }
+  });
+
+  const stop = (e) => {
+    const id = activePointers.get(e.pointerId);
+    if (id) {
+      container.querySelector(`[data-id="${id}"]`)?.classList.remove('pressed');
+      send({ type: 'button', id, pressed: false });
+    }
+    activePointers.delete(e.pointerId);
+  };
+
+  container.addEventListener('pointerup', stop);
+  container.addEventListener('pointercancel', stop);
+}
+
+
 function setupTrigger(el, id) {
-  let startY = 0;
   let activePointerId = null;
 
   el.addEventListener('pointerdown', (e) => {
@@ -500,32 +624,18 @@ function setupTrigger(el, id) {
     e.preventDefault();
     activePointerId = e.pointerId;
     el.setPointerCapture(e.pointerId);
-    startY = e.clientY;
     el.classList.add('pressed');
     haptic(15);
     
-    // Send 100% on initial tap for immediate response, or just start at 0? 
-    // Most users expect immediate response. Let's send 1.0 (100%) but allow dragging.
-    // Actually, let's just send 0 on down, but update text immediately.
-    el.textContent = id.toUpperCase() + ' 0%';
-    send({ type: 'trigger', id, value: 0 });
-  });
-
-  el.addEventListener('pointermove', (e) => {
-    if (layoutEditing || e.pointerId !== activePointerId) return;
-    // Drag down to increase trigger value
-    const dragDistance = 60; // pixels for 100%
-    const v = Math.max(0, Math.min(1, (e.clientY - startY) / dragDistance));
-    el.textContent = id.toUpperCase() + (v > 0.01 ? ` ${Math.round(v * 100)}%` : ' 0%');
-    send({ type: 'trigger', id, value: v });
+    // Immediate 100% response for triggers
+    sendThrottled({ type: 'trigger', id, value: 1.0 });
   });
 
   const up = (e) => {
     if (e.pointerId !== activePointerId) return;
     activePointerId = null;
     el.classList.remove('pressed');
-    el.textContent = id.toUpperCase();
-    send({ type: 'trigger', id, value: 0 });
+    sendThrottled({ type: 'trigger', id, value: 0 });
   };
 
   el.addEventListener('pointerup', up);
@@ -559,7 +669,7 @@ function setupStick(zoneId, axisId, knobId) {
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > STICK_MAX) { dx = dx / dist * STICK_MAX; dy = dy / dist * STICK_MAX; }
     knob.style.transform = `translate(${dx}px,${dy}px)`;
-    send({ type: 'axis', id: axisId, x: dx / STICK_MAX, y: dy / STICK_MAX });
+    sendThrottled({ type: 'axis', id: axisId, x: dx / STICK_MAX, y: dy / STICK_MAX });
   });
 
   const up = (e) => {
@@ -573,29 +683,67 @@ function setupStick(zoneId, axisId, knobId) {
   zone.addEventListener('pointercancel', up);
 }
 
+function resetAllData() {
+  if (confirm('This will clear all your custom layout and settings. Are you sure?')) {
+    localStorage.clear();
+    location.reload();
+  }
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 const settingsPanel = document.getElementById('settings-panel');
+const resetAllBtn    = document.getElementById('reset-all-btn');
+
+if (resetAllBtn) resetAllBtn.addEventListener('click', resetAllData);
+
+function initHighRefresh() {
+  if (document.getElementById('gc-high-refresh-keepalive-style')) return;
+  const style = document.createElement('style');
+  style.id = 'gc-high-refresh-keepalive-style';
+  style.textContent = `
+    @keyframes gcHighRefreshKeepAlive {
+      from { transform: translate3d(0, 0, 0); }
+      to { transform: translate3d(1px, 0, 0); }
+    }
+    #gc-high-refresh-keepalive {
+      position: fixed; right: 0; bottom: 0; width: 1px; height: 1px;
+      pointer-events: none; opacity: 0.01; z-index: 0;
+      animation: gcHighRefreshKeepAlive 0.2s linear infinite;
+    }
+  `;
+  document.head.appendChild(style);
+  const div = document.createElement('div');
+  div.id = 'gc-high-refresh-keepalive';
+  document.body.appendChild(div);
+}
 
 // ── Controller Modes ──────────────────────────────────────────────────────────
 const CONTROLLER_TEMPLATES = {
   standard: `
     <div class="top-bar">
-      <div class="trigger-group">
-        <button class="trigger-btn" data-id="lt">LT</button>
-        <button class="bumper-btn"  data-id="lb">LB</button>
+      <div class="trigger-group left">
+        <button class="bumper-btn"  data-id="lb">L1</button>
+        <button class="trigger-btn" data-id="lt">L2</button>
       </div>
       <div class="center-buttons">
-        <button class="sys-btn" data-id="back">⊟</button>
+        <button class="sys-btn" data-id="back">SHARE</button>
         <button class="guide-btn" data-id="guide" id="settings-trigger">⬤</button>
-        <button class="sys-btn" data-id="start">⊞</button>
+        <button class="sys-btn" data-id="start">OPTIONS</button>
       </div>
-      <div class="trigger-group">
-        <button class="bumper-btn"  data-id="rb">RB</button>
-        <button class="trigger-btn" data-id="rt">RT</button>
+      <div class="trigger-group right">
+        <button class="bumper-btn"  data-id="rb">R1</button>
+        <button class="trigger-btn" data-id="rt">R2</button>
       </div>
     </div>
-    <div class="bottom-area">
-      <div class="left-zone">
+    <div class="bottom-area centered-controls">
+      <div class="side-zone left">
+        <div class="stick-zone" id="left-stick-zone" data-id="thumb_left">
+          <div class="stick-base" style="width: 140px; height: 140px;">
+            <div class="stick-knob" id="left-stick-knob" style="width: 70px; height: 70px; top: 35px; left: 35px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="center-zone">
         <div class="dpad">
           <button class="dpad-btn dpad-up"    data-id="dpad_up">▲</button>
           <button class="dpad-btn dpad-left"  data-id="dpad_left">◀</button>
@@ -603,11 +751,6 @@ const CONTROLLER_TEMPLATES = {
           <button class="dpad-btn dpad-right" data-id="dpad_right">▶</button>
           <button class="dpad-btn dpad-down"  data-id="dpad_down">▼</button>
         </div>
-        <div class="stick-zone" id="left-stick-zone" data-id="thumb_left">
-          <div class="stick-base"><div class="stick-knob" id="left-stick-knob"></div></div>
-        </div>
-      </div>
-      <div class="right-zone">
         <div class="face-buttons">
           <div class="face-row"><button class="face-btn face-y" data-id="y">Y</button></div>
           <div class="face-row">
@@ -616,8 +759,12 @@ const CONTROLLER_TEMPLATES = {
           </div>
           <div class="face-row"><button class="face-btn face-a" data-id="a">A</button></div>
         </div>
+      </div>
+      <div class="side-zone right">
         <div class="stick-zone" id="right-stick-zone" data-id="thumb_right">
-          <div class="stick-base"><div class="stick-knob" id="right-stick-knob"></div></div>
+          <div class="stick-base" style="width: 140px; height: 140px;">
+            <div class="stick-knob" id="right-stick-knob" style="width: 70px; height: 70px; top: 35px; left: 35px;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -778,6 +925,27 @@ document.getElementById('fullscreen-btn').addEventListener('click', () => {
 const orientationPrompt = document.getElementById('orientation-prompt');
 const phoneSplash        = document.getElementById('phone-splash');
 let splashDone          = false;
+let wakeLock            = null;
+
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        console.log('Wake Lock was released');
+      });
+    } catch (err) {
+      console.error(`${err.name}, ${err.message}`);
+    }
+  }
+}
+
+// Re-request wake lock when page becomes visible again
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    requestWakeLock();
+  }
+});
 
 function checkOrientation() {
   const isLandscape = window.innerWidth > window.innerHeight;
@@ -855,6 +1023,7 @@ window.addEventListener('resize', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+initHighRefresh();
 applyControllerMode(); // Calls setupLayoutControls + setupButtons + setupStick + applyLayout
 
 // Start the sequence

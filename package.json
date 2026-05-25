@@ -1,7 +1,7 @@
 {
   "name": "tapcontroller",
   "productName": "TapController",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "Turn your phone into a game controller for PC",
   "main": "main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "publish:win": "electron-builder --win -p always",
-    "prebuild": "taskkill /F /IM TapController.exe /T 2>$null || set ERRORLEVEL=0 && Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue || set ERRORLEVEL=0",
+    "prebuild": "powershell -Command \"Stop-Process -Name TapController -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue\"",
     "postinstall": "echo Install complete. Run 'pip install vgamepad' if not done already. ViGEmBus installer is bundled at tools/drivers/ViGEmBus_1.22.0_x64_x86_arm64.exe."
   },
   "dependencies": {

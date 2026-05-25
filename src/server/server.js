@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const { handleInput } = require('./input');
 
 // ── Input validation ──────────────────────────────────────────────────────────
-const VALID_TYPES   = new Set(['button','axis','trigger','gyro','name','mouse-click']);
+const VALID_TYPES   = new Set(['button','axis','trigger','gyro','name','mouse-click','ping']);
 const VALID_BTN_IDS = new Set(['a','b','x','y','lb','rb','start','back','guide',
   'thumb_left','thumb_right','dpad_up','dpad_down','dpad_left','dpad_right','lt','rt']);
 const VALID_MODES   = new Set(['gamepad','keyboard','mouse']);
@@ -38,6 +38,8 @@ function validateMessage(msg) {
       return typeof msg.value === 'string' && msg.value.length <= 32;
     case 'mouse-click':
       return VALID_MB.has(msg.button ?? 'left');
+    case 'ping':
+      return true;
     default:
       return false;
   }
@@ -67,6 +69,10 @@ let activeHttpServer = null;
 let heartbeatInterval = null;
 
 function allocateSlot(id) {
+  // Ensure the ID is not already in a slot (Multiple Connection Bug fix)
+  const existingSlot = playerSlots.indexOf(id);
+  if (existingSlot !== -1) return existingSlot;
+
   const slot = playerSlots.findIndex((existing) => existing === null);
   if (slot === -1) return -1;
   playerSlots[slot] = id;
@@ -74,9 +80,14 @@ function allocateSlot(id) {
 }
 
 function releaseSlot(id) {
-  const slot = playerSlots.findIndex((existing) => existing === id);
-  if (slot !== -1) playerSlots[slot] = null;
-  return slot;
+  let releasedCount = 0;
+  for (let i = 0; i < playerSlots.length; i++) {
+    if (playerSlots[i] === id) {
+      playerSlots[i] = null;
+      releasedCount++;
+    }
+  }
+  return releasedCount;
 }
 
 function getSlot(id) {
@@ -148,11 +159,17 @@ function createServer(port, token, emit) {
     // Validate token on upgrade — reject unauthorized connections
     verifyClient: ({ req }, cb) => {
       try {
-        const url = new URL(req.url, `http://localhost`);
+        // More robust URL parsing for proxies
+        const fullUrl = req.url.startsWith('http') ? req.url : `http://${req.headers.host || 'localhost'}${req.url}`;
+        const url = new URL(fullUrl);
         const t   = url.searchParams.get('token');
+        
         if (t === token) return cb(true);
+        
+        console.warn(`[server] Unauthorized connection attempt from ${req.socket.remoteAddress} (Token: ${t})`);
         cb(false, 401, 'Unauthorized');
-      } catch {
+      } catch (err) {
+        console.error('[server] verifyClient error:', err);
         cb(false, 400, 'Bad Request');
       }
     },
@@ -161,9 +178,12 @@ function createServer(port, token, emit) {
 
   heartbeatInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
-      if (ws.isAlive === false) return ws.terminate();
+      if (ws.isAlive === false) {
+        console.warn(`[server] Connection appears stale for client (no pong)`);
+        // return ws.terminate(); // Disabled to debug 1006
+      }
       ws.isAlive = false;
-      ws.ping();
+      try { ws.ping(); } catch (_) {}
     });
   }, 30000);
 
@@ -181,10 +201,13 @@ function createServer(port, token, emit) {
       slot = existing.slot - 1;
       isResumed = true;
       
-      // Terminate old socket if it still exists
+      // Terminate old socket only if it's actually closed or we're sure it's dead
+      // (Disabled immediate terminate to prevent 'fighting' connections loop)
+      /*
       if (existing.ws && existing.ws !== ws) {
         try { existing.ws.terminate(); } catch (_) {}
       }
+      */
       
       existing.ws = ws;
       console.log(`[server] Resumed session for ${name} (${id})`);
@@ -230,7 +253,7 @@ function createServer(port, token, emit) {
       // Rate limiting
       const now = Date.now();
       if (now > rlResetAt) { msgCount = 0; rlResetAt = now + 1000; }
-      if (++msgCount > 120) return; // silently drop
+      if (++msgCount > 200) return; // silently drop
 
       // Size limit (8 KB max)
       if (raw.length > 8192) return;
@@ -239,6 +262,11 @@ function createServer(port, token, emit) {
       try { msg = JSON.parse(raw.toString()); } catch { return; }
 
       if (!validateMessage(msg)) return; // drop invalid
+
+      if (msg.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+        return;
+      }
 
       if (msg.type === 'name') {
         const c = clients.get(id);
@@ -257,9 +285,11 @@ function createServer(port, token, emit) {
       emit('client-event', { type: 'input', id, data: normalized });
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       const c = clients.get(id);
       if (c && c.ws !== ws) return; // Don't clean up if this is an old session being replaced
+
+      console.log(`[server] Session closed for ${c?.name || 'unknown'} (${id}) | Code: ${code} | Reason: ${reason}`);
 
       const controllerId = getControllerId(id) || c?.controllerId;
       clients.delete(id);

@@ -38,8 +38,16 @@ function spawnHelper() {
     helperProc = spawn(py, [script], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    
+    helperProc.on('error', (err) => {
+      console.error('[input] Failed to start Python helper:', err);
+      fs.appendFileSync(logFile, `SPAWN ERROR: ${err.message}\n`);
+      helperProc = null;
+      helperReady = false;
+    });
   } catch (e) {
-    console.error('[input] Failed to spawn Python helper:', e.message);
+    console.error('[input] Exception while spawning Python helper:', e.message);
+    fs.appendFileSync(logFile, `SPAWN EXCEPTION: ${e.message}\n`);
     return;
   }
 

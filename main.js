@@ -1,26 +1,28 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, powerSaveBlocker } = require('electron');
 const { randomBytes } = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
+let psbId = null;
+
+// ... (rest of imports)
+
+// ── Error Handling ───────────────────────────────────────────────────────────
+function logError(type, err) {
+  const msg = `[${type}] ${err?.stack || err}\n`;
+  console.error(msg);
+  try {
+    const logPath = path.join(app.getPath('userData'), 'error.log');
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}`);
+  } catch (e) {}
+}
+
+process.on('uncaughtException', (err) => logError('Uncaught Exception', err));
+process.on('unhandledRejection', (reason) => logError('Unhandled Rejection', reason));
+
 // ── App ID for Windows ───────────────────────────────────────────────────────
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.tapcontroller.app');
-}
-
-// ── Unified App Version ───────────────────────────────────────────────────────
-const APP_VERSION = app.getVersion();
-
-// ── Auto-Updater (Optional Dependency) ────────────────────────────────────────
-let autoUpdater = null;
-try {
-  ({ autoUpdater } = require('electron-updater'));
-  if (autoUpdater) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-  }
-} catch (e) {
-  console.warn('[Updater] electron-updater not found. Auto-updates disabled.');
 }
 
 // Remove default application menu
@@ -30,17 +32,11 @@ let mainWindow  = null;
 let splashWindow = null;
 let httpServer  = null;
 let tunnelStop  = null;
-
-// Load persisted configuration
-const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+let autoUpdater = null;
 let config = { port: 7777 };
-try {
-  if (fs.existsSync(CONFIG_PATH)) {
-    config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  }
-} catch (e) { console.error('Failed to load config:', e); }
-
-let port = config.port;
+let port = 7777;
+let CONFIG_PATH = '';
+let APP_VERSION = '';
 
 // Auth token — embedded in QR URL, validated by WS server
 const TOKEN = randomBytes(16).toString('hex');
@@ -60,7 +56,7 @@ function createSplash() {
     icon: path.join(__dirname, 'src/assets/icologo.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  splashWindow.loadFile('src/splash/index.html');
+  splashWindow.loadFile(path.join(__dirname, 'src/splash/index.html'));
   splashWindow.once('ready-to-show', () => splashWindow.show());
 }
 
@@ -84,7 +80,7 @@ function createMainWindow() {
     },
   });
 
-  mainWindow.loadFile('src/renderer/index.html');
+  mainWindow.loadFile(path.join(__dirname, 'src/renderer/index.html'));
 }
 
 // ── Version Comparison Helper ────────────────────────────────────────────────
@@ -100,7 +96,9 @@ function isNewer(current, latest) {
 }
 
 // ── Update Logic ──────────────────────────────────────────────────────────────
-if (autoUpdater) {
+function setupUpdaterListeners() {
+  if (!autoUpdater) return;
+
   autoUpdater.on('checking-for-update', () => {
     console.log('[Updater] Checking for update...');
     emit('update-status', { type: 'checking' });
@@ -235,6 +233,32 @@ function emit(event, data) {
 
 // ── App startup ───────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+  psbId = powerSaveBlocker.start('prevent-app-suspension');
+  console.log(`[App] Power save blocker started: ${psbId}`);
+  
+  APP_VERSION = app.getVersion();
+  CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    }
+  } catch (e) { console.error('Failed to load config:', e); }
+  port = config.port;
+
+  // Auto-Updater (Optional Dependency)
+  try {
+    const { autoUpdater: updater } = require('electron-updater');
+    autoUpdater = updater;
+    if (autoUpdater) {
+      autoUpdater.autoDownload = true;
+      autoUpdater.autoInstallOnAppQuit = true;
+      setupUpdaterListeners();
+    }
+  } catch (e) {
+    console.warn('[Updater] electron-updater not found or setup failed. Auto-updates disabled.');
+  }
+
   createSplash();
   createMainWindow();
 
@@ -292,9 +316,15 @@ app.on('will-quit', (e) => {
 });
 
 function sendServerReady() {
-  const ip = require('ip');
-  const localUrl = buildUrl(`http://${ip.address()}:${port}`);
-  emit('status', { type: 'server-ready', localUrl, port });
+  try {
+    const ip = require('ip');
+    const addr = ip.address() || '127.0.0.1';
+    const localUrl = buildUrl(`http://${addr}:${port}`);
+    emit('status', { type: 'server-ready', localUrl, port });
+  } catch (err) {
+    logError('sendServerReady', err);
+    emit('status', { type: 'server-error', message: 'Failed to determine local IP address' });
+  }
 }
 
 function buildUrl(base) {
@@ -319,7 +349,8 @@ ipcMain.handle('start-tunnel', async () => {
     const { url, stop } = await startTunnel(port);
     tunnelStop = stop;
     const ip = require('ip');
-    const localUrl = buildUrl(`http://${ip.address()}:${port}`);
+    const addr = ip.address() || '127.0.0.1';
+    const localUrl = buildUrl(`http://${addr}:${port}`);
     emit('status', { type: 'tunnel-ready', tunnelUrl: buildUrl(url.replace(/\/$/, '')), localUrl });
     return { ok: true, url: buildUrl(url.replace(/\/$/, '')) };
   } catch (err) {
@@ -331,7 +362,8 @@ ipcMain.handle('start-tunnel', async () => {
 ipcMain.handle('stop-tunnel', () => {
   if (tunnelStop) { tunnelStop(); tunnelStop = null; }
   const ip = require('ip');
-  const localUrl = buildUrl(`http://${ip.address()}:${port}`);
+  const addr = ip.address() || '127.0.0.1';
+  const localUrl = buildUrl(`http://${addr}:${port}`);
   emit('status', { type: 'server-ready', localUrl, port });
   return { ok: true };
 });
@@ -339,7 +371,8 @@ ipcMain.handle('stop-tunnel', () => {
 // ── Misc IPC ──────────────────────────────────────────────────────────────────
 ipcMain.handle('get-local-url', () => {
   const ip = require('ip');
-  return buildUrl(`http://${ip.address()}:${port}`);
+  const addr = ip.address() || '127.0.0.1';
+  return buildUrl(`http://${addr}:${port}`);
 });
 
 ipcMain.handle('get-token', () => TOKEN);
@@ -358,5 +391,6 @@ ipcMain.handle('get-admin', () => {
 ipcMain.handle('get-server-info', () => {
   if (!port) return null;
   const ip = require('ip');
-  return { localUrl: buildUrl(`http://${ip.address()}:${port}`), port, version: APP_VERSION };
+  const addr = ip.address() || '127.0.0.1';
+  return { localUrl: buildUrl(`http://${addr}:${port}`), port, version: APP_VERSION };
 });

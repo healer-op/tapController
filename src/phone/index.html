@@ -65,6 +65,7 @@
       <div class="overlay-icon" id="overlay-icon">🎮</div>
       <div class="overlay-title" id="overlay-title">Connecting...</div>
       <div class="overlay-sub"   id="overlay-sub">Please wait</div>
+      <button id="reconnect-btn" class="consent-btn hidden" style="margin-top: 20px;">Try Again</button>
     </div>
   </div>
 
@@ -123,6 +124,9 @@
       <div class="settings-group">
         <button id="fullscreen-btn" class="settings-save-btn" style="background: rgba(255,255,255,0.1); box-shadow: none; border: 1px solid var(--btn-border);">Toggle Fullscreen</button>
       </div>
+      <div class="settings-group" style="margin-top: 20px; border-top: 1px solid var(--btn-border); padding-top: 15px;">
+        <button id="reset-all-btn" class="settings-save-btn" style="background: #e74c3c;">Reset All Data & Reconnect</button>
+      </div>
       <button id="settings-save" class="settings-save-btn">Save &amp; Close</button>
     </div>
   </div>
@@ -137,56 +141,7 @@
   </div>
 
   <!-- Controller layout -->
-  <div id="controller" class="controller">
-    <div class="top-bar">
-      <div class="trigger-group">
-        <button class="trigger-btn" data-id="lt">LT</button>
-        <button class="bumper-btn"  data-id="lb">LB</button>
-      </div>
-      <div class="center-buttons">
-        <button class="sys-btn" data-id="back">⊟</button>
-        <button class="guide-btn" data-id="guide" id="settings-trigger">⬤</button>
-        <button class="sys-btn" data-id="start">⊞</button>
-      </div>
-      <div class="trigger-group">
-        <button class="bumper-btn"  data-id="rb">RB</button>
-        <button class="trigger-btn" data-id="rt">RT</button>
-      </div>
-    </div>
-
-    <div class="bottom-area">
-      <div class="left-zone">
-        <div class="dpad">
-          <button class="dpad-btn dpad-up"    data-id="dpad_up">▲</button>
-          <button class="dpad-btn dpad-left"  data-id="dpad_left">◀</button>
-          <div class="dpad-center"></div>
-          <button class="dpad-btn dpad-right" data-id="dpad_right">▶</button>
-          <button class="dpad-btn dpad-down"  data-id="dpad_down">▼</button>
-        </div>
-        <div class="stick-zone" id="left-stick-zone">
-          <div class="stick-base">
-            <div class="stick-knob" id="left-stick-knob"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="right-zone">
-        <div class="face-buttons">
-          <button class="face-btn face-y" data-id="y">Y</button>
-          <div class="face-row">
-            <button class="face-btn face-x" data-id="x">X</button>
-            <button class="face-btn face-b" data-id="b">B</button>
-          </div>
-          <button class="face-btn face-a" data-id="a">A</button>
-        </div>
-        <div class="stick-zone" id="right-stick-zone">
-          <div class="stick-base">
-            <div class="stick-knob" id="right-stick-knob"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div id="controller" class="controller"></div>
 
   <script src="controller.js"></script>
 </body>
