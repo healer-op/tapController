@@ -1,9 +1,113 @@
 'use strict';
 
-// ── Window Controls ───────────────────────────────────────────────────────────
+// ── Auth & Login Screen ───────────────────────────────────────────────────────
+const loginScreen  = document.getElementById('login-screen');
+const mainApp      = document.getElementById('main-app');
+const appTitlebar  = document.getElementById('app-titlebar');
+const userAvContainer = document.getElementById('user-av-container');
+const userAvImg    = document.getElementById('user-av-img');
+const aboutBanner  = document.getElementById('about-user-banner');
+const aboutAv      = document.getElementById('about-av');
+const aboutUserName = document.getElementById('about-user-name');
+const aboutUserTag = document.getElementById('about-user-tag');
+
+let currentAuthData = null;
+
+function showApp() {
+  loginScreen.style.display = 'none';
+  mainApp.style.display = '';
+  appTitlebar.style.display = '';
+}
+
+function showLogin() {
+  loginScreen.style.display = '';
+  mainApp.style.display = 'none';
+  appTitlebar.style.display = 'none';
+}
+
+function applyAuth(authData) {
+  currentAuthData = authData;
+  if (!authData) { showLogin(); return; }
+
+  // Show avatar in header
+  if (authData.avatar) {
+    userAvImg.src = authData.avatar;
+    userAvContainer.classList.remove('hidden');
+  }
+
+  // Populate about-modal user banner
+  if (aboutBanner) {
+    aboutBanner.style.display = 'flex';
+    aboutAv.src = authData.avatar || '';
+    aboutUserName.textContent = authData.globalName || authData.username || '—';
+    aboutUserTag.textContent  = `@${authData.username || ''}`;
+  }
+
+  showApp();
+}
+
+async function doLogout() {
+  await window.api.logout();
+  currentAuthData = null;
+  userAvContainer.classList.add('hidden');
+  if (aboutBanner) aboutBanner.style.display = 'none';
+  showLogin();
+}
+
+async function openLogin() {
+  await window.api.openLogin();
+}
+
+async function submitManualAuth() {
+  const val = document.getElementById('auth-inp').value.trim();
+  if (!val) return;
+  if (/^tapcontroller:\/\//i.test(val)) {
+    const result = await window.api.parseAuthUrl(val);
+    if (result) applyAuth(result);
+  }
+}
+
+// Init: check stored auth
+(async () => {
+  try {
+    const auth = await window.api.getAuth();
+    applyAuth(auth);
+  } catch(e) {
+    showLogin();
+  }
+})();
+
+// Listen for auth updates from main process (protocol deep link)
+window.api.onAuthUpdate((authData) => {
+  applyAuth(authData);
+});
+
+// Listen for auth errors (e.g. not in Discord server)
+window.api.onAuthError((err) => {
+  showLogin();
+  const subtitle = document.querySelector('.login-subtitle');
+  if (!subtitle) return;
+  if (err.reason === 'not_in_server') {
+    subtitle.textContent = 'You must be a member of the Discord server to use TapController.';
+    subtitle.style.color = '#e74c3c';
+  } else {
+    subtitle.textContent = 'Could not verify Discord server membership. Try again.';
+    subtitle.style.color = '#e74c3c';
+  }
+  setTimeout(() => {
+    subtitle.textContent = 'Turn your phone into a wireless game controller';
+    subtitle.style.color = '';
+  }, 6000);
+});
+
+// ── Window Controls (main app + login screen) ─────────────────────────────────
 document.getElementById('win-close').addEventListener('click', () => window.api.windowClose());
 document.getElementById('win-min').addEventListener('click',   () => window.api.windowMinimize());
 document.getElementById('win-max').addEventListener('click',   () => window.api.windowMaximize());
+
+document.getElementById('login-win-close').addEventListener('click', () => window.api.windowClose());
+document.getElementById('login-win-min').addEventListener('click',   () => window.api.windowMinimize());
+document.getElementById('login-win-max').addEventListener('click',   () => window.api.windowMaximize());
 
 // ── Privacy Blur ─────────────────────────────────────────────────────────────
 document.querySelectorAll('.privacy-blur').forEach(el => {
@@ -11,7 +115,7 @@ document.querySelectorAll('.privacy-blur').forEach(el => {
 });
 
 // ── Port Configuration ────────────────────────────────────────────────────────
-const portInput = document.getElementById('port-input');
+const portInput  = document.getElementById('port-input');
 const savePortBtn = document.getElementById('save-port-btn');
 
 savePortBtn.addEventListener('click', async () => {
@@ -66,10 +170,7 @@ window.api.onUpdateStatus((data) => {
   }
 });
 
-checkUpdateBtn.addEventListener('click', () => {
-  window.api.checkUpdate();
-});
-
+checkUpdateBtn.addEventListener('click', () => { window.api.checkUpdate(); });
 restartBtn.addEventListener('click', () => window.api.restartApp());
 
 // ── Element refs ──────────────────────────────────────────────────────────────
@@ -111,7 +212,6 @@ async function renderQR(url) {
 }
 
 function refreshQR() {
-  // Internet mode falls back to local URL when tunnel is not running
   const url = qrMode === 'internet' ? (tunnelUrl || localUrl) : localUrl;
   if (url) {
     renderQR(url);
@@ -191,7 +291,6 @@ document.getElementById('tunnel-confirm').addEventListener('click', async () => 
     tunnelBtn.disabled = false;
     tunnelBtnLabel.textContent = 'Open to Internet';
   }
-  // Success is handled via 'tunnel-ready' status event
 });
 
 async function stopTunnel() {
@@ -210,6 +309,11 @@ function setTunnelRunning(running) {
   tunnelBtn.classList.toggle('tunnel-btn--stop', running);
   tunnelBtnIcon.textContent  = running ? '⛔' : '🌐';
   tunnelBtnLabel.textContent = running ? 'Close Internet' : 'Open to Internet';
+  if (running) {
+    window.api.updateRpc({ details: 'Hosting a session', state: 'Internet Tunnel Active' });
+  } else {
+    window.api.updateRpc({ details: 'In App', state: 'Ready to play' });
+  }
 }
 
 function showTunnelStatus(type, msg) {
@@ -267,9 +371,19 @@ window.api.onClientEvent((data) => {
       lastInput: '',
     });
     window.api.getAdmin().then(id => { currentAdminId = id; rebuildList(); });
+    const count = connectedClients.size;
+    window.api.updateRpc({
+      details: `${count} player${count !== 1 ? 's' : ''} connected`,
+      state: tunnelRunning ? 'Internet Tunnel Active' : 'Local Session'
+    });
   } else if (data.type === 'disconnected') {
     connectedClients.delete(data.id);
     rebuildList();
+    const count = connectedClients.size;
+    window.api.updateRpc({
+      details: count > 0 ? `${count} player${count !== 1 ? 's' : ''} connected` : 'In App',
+      state: tunnelRunning ? 'Internet Tunnel Active' : 'Ready to play'
+    });
   } else if (data.type === 'renamed') {
     const c = connectedClients.get(data.id);
     if (c) { c.name = data.name; rebuildList(); }
@@ -293,7 +407,7 @@ function updateClientInput(id, inputStr) {
   if (el) {
     el.textContent = inputStr;
     el.classList.remove('flash');
-    void el.offsetWidth; // trigger reflow
+    void el.offsetWidth;
     if (inputStr) el.classList.add('flash');
   }
 }
@@ -301,7 +415,7 @@ function updateClientInput(id, inputStr) {
 function rebuildList() {
   countBadge.textContent = connectedClients.size;
   if (!connectedClients.size) {
-    clientList.innerHTML = '<li class="client-empty">No players yet.<br>Scan the QR code to join.</li>';        
+    clientList.innerHTML = '<li class="client-empty">No players yet.<br>Scan the QR code to join.</li>';
     return;
   }
   clientList.innerHTML = '';
@@ -312,8 +426,8 @@ function rebuildList() {
     const slot = c.slot || 0;
     const color = AVATAR_COLORS[(slot ? slot - 1 : 0) % AVATAR_COLORS.length];
     const isAdmin = (c.id === currentAdminId) || slot === 1;
-    
-    const adminHtml = isAdmin 
+
+    const adminHtml = isAdmin
       ? `<div class="slot-badge slot-badge--p1">P1</div>`
       : `<button class="admin-btn" data-id="${c.id}">Make P1</button>`;
 
@@ -333,13 +447,13 @@ function rebuildList() {
     btn.addEventListener('click', () => window.api.setAdmin(btn.dataset.id));
   });
 }
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function esc(s) {
   return s.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
 function shorten(url) {
-  // Store full URL as data attribute for copy buttons
   const el = document.getElementById(
     url === tunnelUrl || url?.includes('trycloudflare') ? 'tunnel-url' : 'local-url'
   );

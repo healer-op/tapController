@@ -136,7 +136,15 @@ html, body {
 .about-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(124, 106, 247, 0.1); transform: rotate(15deg); }
 
 /* ── About modal extras ──────────────────────────────────────────────────── */
-.about-modal { position: relative; max-width: 380px; }
+.about-modal {
+  position: relative;
+  max-width: 460px;
+  width: 92vw;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.about-modal::-webkit-scrollbar { display: none; }
 .about-modal-close {
   position: absolute; top: 15px; right: 15px;
   background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted);
@@ -181,8 +189,8 @@ html, body {
 }
 
 .win-btn {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
@@ -190,14 +198,30 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: filter 0.2s;
+  transition: filter 0.15s;
+  flex-shrink: 0;
 }
 
-.win-btn:hover { filter: brightness(1.2); }
+.win-btn::before {
+  font-size: 7px;
+  font-weight: 900;
+  color: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.window-controls:hover .win-btn::before { opacity: 1; }
+.window-controls:hover .win-btn { filter: brightness(1.05); }
 
 .win-close { background: #ff5f56; border: 1px solid #e0443e; }
 .win-min   { background: #ffbd2e; border: 1px solid #dea123; }
 .win-max   { background: #27c93f; border: 1px solid #1aab29; }
+
+.win-close::before { content: '✕'; }
+.win-min::before   { content: '−'; }
+.win-max::before   { content: '⤢'; }
 
 .titlebar-title {
   flex: 1;
@@ -333,23 +357,21 @@ html, body {
   justify-content: center;
   background: rgba(0,0,0,0.25);
   border-radius: 14px;
-  padding: 18px;
+  padding: 24px;
   min-height: 220px;
   aspect-ratio: 1 / 1;
   border: 1px solid var(--border);
   position: relative;
-  overflow: hidden;
 }
 
-.qr-img { 
+.qr-img {
   width: 100%;
-  max-width: 280px;
+  max-width: 300px;
   height: auto;
   aspect-ratio: 1 / 1;
-  border-radius: 10px; 
+  border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  background: white;
-  padding: 8px;
+  display: block;
 }
 
 .qr-placeholder {
@@ -547,3 +569,262 @@ html, body {
 .info-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .info-val   { font-size: 12px; font-family: 'SFMono-Regular', monospace; font-weight: 600; color: var(--text); }
 .info-val--green { color: var(--green); }
+
+/* ── Spin keyframe (referenced by spinner) ───────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Login Screen ────────────────────────────────────────────────────────── */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* icologo-matched background: dark center + quadrant color gradients */
+  background: #0c0c0e;
+  background-image:
+    radial-gradient(ellipse at 0% 0%,   rgba(230, 175, 10, 0.55)  0%, transparent 55%),
+    radial-gradient(ellipse at 100% 0%, rgba(210, 45, 30, 0.55)   0%, transparent 55%),
+    radial-gradient(ellipse at 0% 100%, rgba(25, 95, 195, 0.65)   0%, transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(35, 190, 100, 0.55) 0%, transparent 55%);
+  -webkit-app-region: drag;
+}
+
+.login-titlebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  -webkit-app-region: drag;
+  z-index: 10;
+}
+.login-titlebar .window-controls {
+  -webkit-app-region: no-drag;
+}
+
+.login-card {
+  background: rgba(10, 10, 18, 0.70);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: 44px 40px 36px;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
+  animation: loginCardIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  -webkit-app-region: no-drag;
+}
+@keyframes loginCardIn {
+  from { opacity: 0; transform: scale(0.88) translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.login-logo {
+  height: 72px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.6));
+}
+
+.login-title {
+  font-size: 26px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+
+.login-subtitle {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 28px;
+}
+
+.btn-discord {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 20px;
+  background: #5865f2;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 18px rgba(88, 101, 242, 0.45);
+  margin-bottom: 20px;
+}
+.btn-discord:hover { transform: translateY(-2px); filter: brightness(1.1); box-shadow: 0 6px 22px rgba(88, 101, 242, 0.55); }
+.btn-discord:active { transform: translateY(0); }
+
+.login-divider {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.login-manual-row {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+}
+
+.login-inp {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.login-inp::placeholder { color: rgba(255,255,255,0.3); }
+.login-inp:focus { border-color: rgba(88,101,242,0.6); background: rgba(88,101,242,0.08); }
+
+.login-submit-btn {
+  width: 40px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.login-submit-btn:hover { background: rgba(88,101,242,0.3); border-color: #5865f2; }
+
+/* ── User Avatar in Header ───────────────────────────────────────────────── */
+.user-av-container {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.user-av-container.hidden { display: none; }
+
+.user-av-img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent);
+  transition: all 0.2s;
+  box-shadow: 0 2px 10px var(--accent-glow);
+}
+.user-av-container:hover .user-av-img {
+  border-color: var(--red);
+  box-shadow: 0 2px 10px rgba(231,76,60,0.4);
+  filter: brightness(0.75);
+}
+
+.user-av-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10,10,18,0.92);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--red);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  backdrop-filter: blur(10px);
+}
+.user-av-container:hover .user-av-tooltip { opacity: 1; }
+
+/* ── About modal user banner ─────────────────────────────────────────────── */
+.about-user-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(88, 101, 242, 0.08);
+  border: 1px solid rgba(88, 101, 242, 0.25);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.about-user-av-wrap { position: relative; flex-shrink: 0; }
+
+.about-user-av {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #5865f2;
+}
+
+.about-user-info { flex: 1; min-width: 0; }
+.about-user-name { font-size: 14px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.about-user-id   { font-size: 11px; color: var(--text-muted); font-family: 'SFMono-Regular', monospace; }
+
+.about-logout-btn {
+  background: rgba(231,76,60,0.1);
+  border: 1px solid rgba(231,76,60,0.25);
+  color: var(--red);
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.about-logout-btn:hover { background: rgba(231,76,60,0.2); border-color: var(--red); }
+
+/* ── About modal settings groups ─────────────────────────────────────────── */
+.settings-group-desktop {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.settings-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+.settings-input {
+  background: transparent;
+  border: none;
+  color: var(--accent2);
+  font-size: 13px;
+  font-weight: 800;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  outline: none;
+  width: 80px;
+}

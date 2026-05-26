@@ -135,6 +135,7 @@ function setAdmin(id) {
 function createServer(port, token, emit) {
   globalEmit = emit;
   const app = express();
+  app.set('trust proxy', 1);
   const httpServer = http.createServer(app);
 
   // Only serve the phone controller UI — no directory listing
@@ -156,6 +157,7 @@ function createServer(port, token, emit) {
   activeHttpServer = httpServer;
   const wss = new WebSocketServer({
     server: httpServer,
+    perMessageDeflate: false,
     // Validate token on upgrade — reject unauthorized connections
     verifyClient: ({ req }, cb) => {
       try {

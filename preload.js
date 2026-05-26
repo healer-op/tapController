@@ -7,8 +7,8 @@ const SvgRenderer = require('qrcode/lib/renderer/svg-tag');
 function buildSvgDataUrl(url) {
   const qrData = QRCodeCore.create(url, { errorCorrectionLevel: 'M' });
   const svg    = SvgRenderer.render(qrData, {
-    margin: 2, width: 280,
-    color: { dark: '#e0e0f0', light: '#1a1a2e' },
+    margin: 4, width: 300,
+    color: { dark: '#0d0d1a', light: '#ffffff' },
   });
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
@@ -17,6 +17,18 @@ contextBridge.exposeInMainWorld('api', {
   // Status & client events
   onStatus:      (cb) => ipcRenderer.on('status',       (_, d) => cb(d)),
   onClientEvent: (cb) => ipcRenderer.on('client-event', (_, d) => cb(d)),
+
+  // Auth
+  getAuth:       ()    => ipcRenderer.invoke('get-auth'),
+  logout:        ()    => ipcRenderer.invoke('logout'),
+  openLogin:     ()    => ipcRenderer.invoke('open-login'),
+  parseAuthUrl:  (url) => ipcRenderer.invoke('parse-auth-url', url),
+  onAuthUpdate:  (cb)  => ipcRenderer.on('auth-update', (_, d) => cb(d)),
+  onAuthError:   (cb)  => ipcRenderer.on('auth-error',  (_, d) => cb(d)),
+  openExternal:  (url) => ipcRenderer.invoke('open-external', url),
+
+  // Discord RPC
+  updateRpc: (opts) => ipcRenderer.invoke('update-rpc', opts),
 
   // Queries
   getLocalUrl: () => ipcRenderer.invoke('get-local-url'),
