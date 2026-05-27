@@ -365,13 +365,13 @@ html, body {
 }
 
 .qr-img {
-  width: 100%;
-  max-width: 300px;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  display: block;
+    width: 100%;
+    max-width: 30.3em;
+    height: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 21px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: block;
 }
 
 .qr-placeholder {

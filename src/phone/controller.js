@@ -726,9 +726,9 @@ const CONTROLLER_TEMPLATES = {
         <button class="trigger-btn" data-id="lt">L2</button>
       </div>
       <div class="center-buttons">
-        <button class="sys-btn" data-id="back">SHARE</button>
-        <button class="guide-btn" data-id="guide" id="settings-trigger">⬤</button>
-        <button class="sys-btn" data-id="start">OPTIONS</button>
+        <button class="sys-btn" data-id="back">⊞</button>
+        <button class="guide-btn" data-id="guide" id="settings-trigger">⚙️</button>
+        <button class="sys-btn" data-id="start">☰</button>
       </div>
       <div class="trigger-group right">
         <button class="bumper-btn"  data-id="rb">R1</button>
