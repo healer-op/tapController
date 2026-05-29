@@ -3,3 +3,7 @@ dist/
 *.log
 .DS_Store
 .env
+build_py/
+tools/gamepad_helper.exe
+tools/gamepad_helper.spec
+__pycache__/

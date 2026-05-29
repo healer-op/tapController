@@ -61,4 +61,7 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (_, d) => cb(d)),
   restartApp:     () => ipcRenderer.send('restart-app'),
   checkUpdate:    () => ipcRenderer.invoke('check-update'),
+
+  // Logs
+  onAppLog: (cb) => ipcRenderer.on('app-log', (_, d) => cb(d)),
 });

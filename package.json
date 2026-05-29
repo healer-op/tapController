@@ -1,7 +1,7 @@
 {
   "name": "tapcontroller",
   "productName": "TapController",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Turn your phone into a game controller for PC",
   "main": "main.js",
   "scripts": {
@@ -10,8 +10,9 @@
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "publish:win": "electron-builder --win -p always",
-    "prebuild": "powershell -Command \"Stop-Process -Name TapController -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue\"",
-    "postinstall": "echo Install complete. Run 'pip install vgamepad' if not done already. ViGEmBus installer is bundled at tools/drivers/ViGEmBus_1.22.0_x64_x86_arm64.exe."
+    "prebuild": "npm run build:helper && powershell -Command \"Stop-Process -Name TapController -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue\"",
+    "build:helper": "pyinstaller --onefile --collect-all vgamepad --distpath tools --workpath build_py --specpath build_py tools/gamepad_helper.py",
+    "postinstall": "echo Setup complete. ViGEmBus installer will be run automatically during the app installation."
   },
   "dependencies": {
     "cloudflared": "^0.7.1",
@@ -20,11 +21,11 @@
     "express": "^4.18.2",
     "ip": "^2.0.0",
     "qrcode": "^1.5.3",
-    "uuid": "^9.0.0",
+    "uuid": "^14.0.0",
     "ws": "^8.14.2"
   },
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1"
   }
 }

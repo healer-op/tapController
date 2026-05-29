@@ -8,34 +8,38 @@ let helperViGEm = false;
 
 const pendingQueue = [];
 
-// ── Resolve python executable ────────────────────────────────────────────────
-function getPythonBin() {
-  // Prefer pythonw (no console window) on Windows
-  if (process.platform === 'win32') return 'python';
-  return 'python3';
-}
-
-function getHelperPath() {
+// ── Resolve helper executable ──────────────────────────────────────────────────
+function getHelperCommand() {
   const { app } = require('electron');
+  const fs = require('fs');
   const isPackaged = app ? app.isPackaged : false;
   
-  if (isPackaged) {
-    // In packaged app, tools are in the resources/tools directory
-    return path.join(process.resourcesPath, 'tools/gamepad_helper.py');
+  // Resolve paths
+  const toolsDir = isPackaged 
+    ? path.join(process.resourcesPath, 'tools')
+    : path.join(__dirname, '../../tools');
+    
+  const exePath = path.join(toolsDir, 'gamepad_helper.exe');
+  const pyPath = path.join(toolsDir, 'gamepad_helper.py');
+  
+  // If the standalone executable exists (or we are on Windows and packaged), use it
+  if (fs.existsSync(exePath)) {
+    return { cmd: exePath, args: [] };
   }
-  // In dev environment
-  return path.join(__dirname, '../../tools/gamepad_helper.py');
+  
+  // Fallback to python
+  const pyBin = process.platform === 'win32' ? 'python' : 'python3';
+  return { cmd: pyBin, args: [pyPath] };
 }
 
 // ── Spawn helper ─────────────────────────────────────────────────────────────
 function spawnHelper() {
   if (helperProc) return;
 
-  const py   = getPythonBin();
-  const script = getHelperPath();
+  const { cmd, args } = getHelperCommand();
 
   try {
-    helperProc = spawn(py, [script], {
+    helperProc = spawn(cmd, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     

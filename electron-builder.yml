@@ -25,6 +25,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  include: build/installer.nsh
 
 extraResources:
   - from: node_modules/cloudflared/bin

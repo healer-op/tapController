@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: http: https:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
   <title>TapController</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -125,6 +126,19 @@
     </div>
   </div>
 
+  <!-- ── Logs modal ──────────────────────────────────────────────────────── -->
+  <div id="logs-modal" class="modal-backdrop hidden">
+    <div class="modal about-modal" style="width: 500px; max-width: 90vw;">
+      <button class="about-modal-close" id="logs-close">✕</button>
+      <div class="modal-icon">▤</div>
+      <h2 class="modal-title">Console Logs</h2>
+      <div id="logs-container" style="background:#111; color:#0f0; font-family:monospace; font-size:12px; padding:10px; height:300px; overflow-y:auto; border-radius:8px; text-align:left; white-space:pre-wrap; margin-top:10px; border: 1px solid #333;"></div>
+      <div class="modal-actions" style="margin-top:10px;">
+        <button class="modal-btn modal-btn--cancel" onclick="document.getElementById('logs-container').innerHTML=''">Clear Logs</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Main App ──────────────────────────────────────────────────────────── -->
   <div class="app" id="main-app" style="display:none">
     <!-- Header -->
@@ -132,6 +146,7 @@
       <img src="../assets/logo.png" class="logo-main" alt="TapController Logo">
       <div class="header-right">
         <div id="status-badge" class="badge badge--loading">Starting...</div>
+        <button id="logs-btn" class="about-btn" title="Console Logs" style="font-size: 16px;">▤</button>
         <button id="about-btn" class="about-btn" title="About TapController">ℹ</button>
         <!-- User avatar -->
         <div id="user-av-container" class="user-av-container hidden" title="Click to logout" onclick="doLogout()">

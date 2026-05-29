@@ -109,6 +109,34 @@ document.getElementById('login-win-close').addEventListener('click', () => windo
 document.getElementById('login-win-min').addEventListener('click',   () => window.api.windowMinimize());
 document.getElementById('login-win-max').addEventListener('click',   () => window.api.windowMaximize());
 
+// ── Logs Modal ───────────────────────────────────────────────────────────────
+const logsBtn   = document.getElementById('logs-btn');
+const logsModal = document.getElementById('logs-modal');
+const logsClose = document.getElementById('logs-close');
+const logsContainer = document.getElementById('logs-container');
+
+if (logsBtn && logsModal && logsClose) {
+  logsBtn.addEventListener('click', () => logsModal.classList.remove('hidden'));
+  logsClose.addEventListener('click', () => logsModal.classList.add('hidden'));
+  logsModal.addEventListener('click', (e) => {
+    if (e.target === logsModal) logsModal.classList.add('hidden');
+  });
+}
+
+if (window.api && window.api.onAppLog) {
+  window.api.onAppLog((msg) => {
+    if (!logsContainer) return;
+    const div = document.createElement('div');
+    div.textContent = msg;
+    logsContainer.appendChild(div);
+    if (logsContainer.childNodes.length > 500) {
+      logsContainer.removeChild(logsContainer.firstChild);
+    }
+    // Autoscroll to bottom
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+  });
+}
+
 // ── Privacy Blur ─────────────────────────────────────────────────────────────
 document.querySelectorAll('.privacy-blur').forEach(el => {
   el.addEventListener('click', () => el.classList.add('revealed'));

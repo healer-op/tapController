@@ -1,3 +1,5 @@
+process.env.NODE_NO_WARNINGS = '1';
+process.env.ELECTRON_DISABLE_CRASHPAD = 'true';
 const { app, BrowserWindow, ipcMain, Menu, powerSaveBlocker, shell } = require('electron');
 const { randomBytes } = require('crypto');
 const path = require('path');
@@ -45,6 +47,32 @@ let APP_VERSION = '';
 
 // Auth token — embedded in QR URL, validated by WS server
 const TOKEN = randomBytes(16).toString('hex');
+
+// ── Global Logging Capture ───────────────────────────────────────────────────
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+function broadcastLog(msg) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('app-log', msg); } catch(e) {}
+  }
+}
+
+console.log = function(...args) {
+  originalConsoleLog.apply(console, args);
+  broadcastLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+};
+
+console.error = function(...args) {
+  originalConsoleError.apply(console, args);
+  broadcastLog('[ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+};
+
+console.warn = function(...args) {
+  originalConsoleWarn.apply(console, args);
+  broadcastLog('[WARN] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+};
 
 // ── Discord RPC ───────────────────────────────────────────────────────────────
 let rpc = null;
@@ -349,8 +377,10 @@ app.whenReady().then(async () => {
     }
   });
 
-  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[Renderer] ${message} (${sourceId}:${line})`);
+  mainWindow.webContents.on('console-message', (event, consoleMessage) => {
+    // Suppress security warnings just in case any still log
+    if (consoleMessage.message && consoleMessage.message.includes('Electron Security Warning')) return;
+    console.log(`[Renderer] ${consoleMessage.message} (${consoleMessage.sourceId}:${consoleMessage.line})`);
   });
 
   mainWindow.webContents.on('before-input-event', (_e, input) => {
